@@ -432,7 +432,7 @@ const StatisticsPage = () => {
             }} hoverable>
               <Statistic
                 title={<Text style={{ color: COLORS.textSecondary, fontSize: FONT_SIZES.bodyMedium, lineHeight: LINE_HEIGHTS.body }}>{t('totalSales')}</Text>}
-                value={poolInfo ? Number(poolInfo[4]) / WEI_TO_USDT * 0.1 : 0}
+                value={poolInfo ? Number(poolInfo[4]) / 10 ** 18 * 0.1 : 0}
                 precision={2}
                 valueStyle={{ color: COLORS.success, fontSize: '28px', fontWeight: 'bold', lineHeight: LINE_HEIGHTS.title }}
                 suffix={<Text style={{ color: COLORS.textSecondary, fontSize: FONT_SIZES.bodyMedium }}>USDT</Text>}
@@ -978,7 +978,7 @@ const StatisticsPage = () => {
                           borderRadius: '6px',
                           display: 'inline-block'
                         }}>
-                          {poolInfo ? (Number(poolInfo[4]) / WEI_TO_USDT * 0.1).toFixed(4) : '0.0000'} USDT
+                          {poolInfo ? (Number(poolInfo[4]) / 10 ** 18 * 0.1).toFixed(4) : '0.0000'} USDT
                         </Text>
                       </Col>
                     </Row>

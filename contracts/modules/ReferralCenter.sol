@@ -31,11 +31,11 @@ contract ReferralCenter is Ownable, ReentrancyGuard {
         National  // 4 - 国级徽章
     }
     
-    // 徽章阈值（积分）
-    uint256 public constant MEMBER_BADGE_THRESHOLD = 1100 * 10**18;    // 1100积分
-    uint256 public constant CITY_BADGE_THRESHOLD = 5500 * 10**18;     // 5500积分
-    uint256 public constant PROVINCE_BADGE_THRESHOLD = 27500 * 10**18;   // 27500积分
-    uint256 public constant NATIONAL_BADGE_THRESHOLD = 137500 * 10**18;  // 137500积分
+    // 徽章阈值（积分）- 使用6位小数，与USDT保持一致
+    uint256 public constant MEMBER_BADGE_THRESHOLD = 1100 * 10**6;    // 1100积分
+    uint256 public constant CITY_BADGE_THRESHOLD = 5500 * 10**6;     // 5500积分
+    uint256 public constant PROVINCE_BADGE_THRESHOLD = 27500 * 10**6;   // 27500积分
+    uint256 public constant NATIONAL_BADGE_THRESHOLD = 137500 * 10**6;  // 137500积分
     
     // 用户当前徽章
     mapping(address => BadgeLevel) public userBadges; // 用户 -> 当前徽章等级

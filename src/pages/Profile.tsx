@@ -580,8 +580,8 @@ const ProfilePage = () => {
     let numAmount: number;
     
     if (typeof amount === 'bigint') {
-      // 从合约读取的SCIA余额是wei单位，需要转换为正常单位
-      numAmount = Number(amount) / WEI_TO_USDT;
+      // 从合约读取的SCIA余额是wei单位（18位小数），需要转换为正常单位
+      numAmount = Number(amount) / 10 ** 18;
     } else {
       // 直接使用Number()转换，处理字符串或数字类型
       numAmount = Number(amount);
