@@ -11,7 +11,7 @@ SCIADapp - 基于区块链的私募和推荐奖励DAPP
 ### 1.3 核心功能
 - 私募代币购买（支持USDT支付）
 - 推荐奖励系统（无限代积分传递）
-- 积分系统（直接使用USDT金额作为积分值，1 USDT = 1积分，测试网参数缩小10000倍）
+- 积分系统（直接使用USDT金额作为积分值，1 USDT = 1积分）
 - 徽章等级系统（会员、市级、省级、国家级）
 - 分红机制（根据徽章等级分配收益）
 
@@ -86,29 +86,18 @@ SCIA/
 
 ```
 # 网络配置
-REACT_APP_NETWORK=testnet # mainnet or testnet
+REACT_APP_NETWORK=mainnet
 
 # 主网配置
-REACT_APP_MAINNET_CHAIN_ID=56
-REACT_APP_MAINNET_RPC_URL=https://bsc-dataseed.binance.org/
-REACT_APP_MAINNET_BSC_SCAN_URL=https://bscscan.com/
-
-# 测试网配置
-REACT_APP_TESTNET_CHAIN_ID=97
-REACT_APP_TESTNET_RPC_URL=https://bsc-testnet-rpc.publicnode.com
-REACT_APP_TESTNET_BSC_SCAN_URL=https://testnet.bscscan.com/
+REACT_APP_CHAIN_ID=56
+REACT_APP_RPC_URL=https://bsc-dataseed.binance.org/
+REACT_APP_BSC_SCAN_URL=https://bscscan.com/
 
 # 主网合约地址
-REACT_APP_MAINNET_SANCIA_TOKEN_ADDRESS=0x3f435D68576B7F0373F8D739F4c78B4eF0F51BFE
-REACT_APP_MAINNET_REFERRAL_CENTER_ADDRESS=0xEF8aFe69F625CebEAc83F9A96084D36C2F819A79
-REACT_APP_MAINNET_PRIVATE_SALE_CONTRACT_ADDRESS=0x81c64F6209883A1FE7E5eFE8e61f4BFDD3Fb43e4
-REACT_APP_MAINNET_USDT_ADDRESS=0x55d398326f99059fF775485246999027B3197955
-
-# 测试网合约地址
-REACT_APP_TESTNET_SANCIA_TOKEN_ADDRESS=0xCc528eb49547C258D08f80b77823Ee54D043Ee1C
-REACT_APP_TESTNET_REFERRAL_CENTER_ADDRESS=0x75a6858B136012187F68B9E06Ee048c25b815aB4
-REACT_APP_TESTNET_PRIVATE_SALE_CONTRACT_ADDRESS=0xf5753871068D76CFdb8f2c20b8cd0E6be5C9BC46
-REACT_APP_TESTNET_USDT_ADDRESS=0x337610d27c682E347C9cD60BD4b3b107C9d34dDd
+REACT_APP_PRIVATE_SALE_CONTRACT_ADDRESS=0x81c64F6209883A1FE7E5eFE8e61f4BFDD3Fb43e4
+REACT_APP_USDT_ADDRESS=0x55d398326f99059fF775485246999027B3197955
+REACT_APP_REFERRAL_CENTER_ADDRESS=0xEF8aFe69F625CebEAc83F9A96084D36C2F819A79
+REACT_APP_SANCIA_TOKEN_ADDRESS=0x3f435D68576B7F0373F8D739F4c78B4eF0F51BFE
 
 # 部署者信息
 REACT_APP_DEPLOYER_ADDRESS=0x77D8b5F8a03cB7A7F5eED8D979750650F924d709
@@ -173,8 +162,8 @@ REACT_APP_BSCSCAN_API_KEY=RW6NUTIX67H7C8K14PCEJ22TSRVN8FGDDQ
 - 个人中心页面（Profile.tsx）：已配置，可正常使用
 
 ### 4.5 功能集成
-- **当前项目状态**：已完成测试版最终阶段，所有核心功能已实现并测试通过
-- **合约状态**：所有合约已部署到BSC测试网，合约间测试完成
+- **当前项目状态**：已完成生产版最终阶段，所有核心功能已实现并测试通过
+- **合约状态**：所有合约已部署到BSC主网，合约间测试完成
 - **项目结构**：已创建完整的前端项目结构
 - **依赖安装**：已安装所有必要依赖，包括React 18、TypeScript、Vite 5、RainbowKit 2、Wagmi 2、Ant Design 5、Viem等
 - **页面配置**：已完成所有页面和路由配置，包括：
@@ -260,8 +249,8 @@ REACT_APP_BSCSCAN_API_KEY=RW6NUTIX67H7C8K14PCEJ22TSRVN8FGDDQ
 - 管理员功能（暂停/结束销售、存款、提款等）
 
 #### 5.1.2 关键参数
-- 代币价格：0.00001 USDT/SCIA（测试网，实际应为0.1 USDT/SCIA，即10000000000000 wei USDT/SCIA）
-- 每包USDT：0.01 USDT（测试网，实际应为100 USDT，即10000000000000000 wei USDT）
+- 代币价格：0.1 USDT/SCIA（即10000000000000 wei USDT/SCIA）
+- 每包USDT：100 USDT（即10000000000000000 wei USDT）
 - 每包SCIA：1000 SCIA（即1000000000000000000000 wei SCIA）
 - 最小购买：1 package
 - 最大购买：1000 packages
@@ -376,10 +365,10 @@ const handleBuyTokens = async (packagesToBuy: number, referrer: string) => {
 - 推荐人资格检查
 
 #### 5.3.2 徽章系统
-- **会员徽章**：0.11 USDT（测试网，实际应为1100 USDT）
-- **市级徽章**：0.55 USDT（测试网，实际应为5500 USDT）
-- **省级徽章**：2.75 USDT（测试网，实际应为27500 USDT）
-- **国家级徽章**：13.75 USDT（测试网，实际应为137500 USDT）
+- **会员徽章**：1100 USDT
+- **市级徽章**：5500 USDT
+- **省级徽章**：27500 USDT
+- **国家级徽章**：137500 USDT
 
 #### 5.3.3 分红机制
 - **资金分配**：社区金库转入资金时，通过`fundBadgePool`函数按比例分配到4个徽章池（各25%）
@@ -556,20 +545,7 @@ interface IReferralCenter {
 - 可领取分红
 - 可查看自己的积分和徽章
 
-## 12. 测试网配置
-
-### 12.1 测试网参数（已缩小10000倍）
-- 代币价格：0.00001 USDT/SCIA
-- 每包USDT：0.01 USDT
-- 每包SCIA：1000 SCIA
-
-### 12.2 徽章阈值（测试网）
-- 会员徽章：0.11积分
-- 市级徽章：0.55积分
-- 省级徽章：2.75积分
-- 国家级徽章：13.75积分
-
-## 13. 主网配置（预计）
+## 13. 主网配置
 
 ### 13.1 主网参数
 - 代币价格：0.1 USDT/SCIA
