@@ -18,7 +18,6 @@ const SCIA_ADDRESS = import.meta.env.REACT_APP_SANCIA_TOKEN_ADDRESS as `0x${stri
 
 // 常量定义
 const REFRESH_INTERVAL = 30000; // 30秒
-const WEI_TO_USDT = 10 ** 6; // wei到USDT的转换因子（BSC主网USDT使用6位小数）
 
 // 色彩主题定义
 const COLORS = {
@@ -102,6 +101,19 @@ interface ReferralContribution {
 const ProfilePage = () => {
   const { address: userAddress, isConnected } = useAccount();
   const { t } = useLanguage();
+  
+  // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
+  const { data: usdtDecimals } = useContractRead({
+    address: USDT_ADDRESS,
+    abi: usdtAbi,
+    functionName: 'decimals',
+    query: {
+      enabled: true,
+    },
+  });
+  
+  // 计算小数位数转换因子
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
   
   // 推荐树模态框状态
   const [treeModalVisible, setTreeModalVisible] = React.useState(false);
@@ -385,7 +397,7 @@ const ProfilePage = () => {
           
           // 正确计算：100 USDT = 1000 SCIA
           // 1. 先将USDT的wei值转换为USDT金额
-          const usdtAmount = Number(purchaseAmountWei) / WEI_TO_USDT;
+          const usdtAmount = Number(purchaseAmountWei) / usdtDecimalsFactor;
           // 2. 根据比例计算SCIA数量：每100 USDT对应1000 SCIA
           const sciaAmount = usdtAmount * (SCIA_PER_PACKAGE / PACKAGE_COST_USDT);
           
@@ -503,8 +515,8 @@ const ProfilePage = () => {
   // 格式化分红金额
   const formatDividend = useCallback((amount: bigint | undefined): string => {
     if (!amount) return '0';
-    return (Number(amount) / WEI_TO_USDT).toFixed(6);
-  }, []);
+    return (Number(amount) / usdtDecimalsFactor).toFixed(6);
+  }, [usdtDecimalsFactor]);
 
   // 获取USDT余额
   const { data: usdtBalance, isLoading: isUSDTBalanceLoading } = useContractRead({
@@ -549,16 +561,16 @@ const ProfilePage = () => {
   const formatPoints = useCallback((points: bigint | undefined): string => {
     if (!points) return '0';
     
-    // 转换为USDT金额（1 USDT = 10^6 wei，主网USDT使用6位小数）
-    const usdtAmount = Number(points) / WEI_TO_USDT;
+    // 转换为USDT金额，使用动态获取的小数位数
+    const usdtAmount = Number(points) / usdtDecimalsFactor;
     
     return usdtAmount.toFixed(2);
-  }, []);
+  }, [usdtDecimalsFactor]);
 
   // 格式化USDT金额（从wei转换为USDT）
   const formatUSDT = useCallback((amount: bigint | undefined): string => {
     if (!amount) return '0';
-    const usdtAmount = Number(amount) / WEI_TO_USDT;
+    const usdtAmount = Number(amount) / usdtDecimalsFactor;
     
     // 根据数值大小动态调整小数位数
     if (usdtAmount >= 100) {
@@ -571,7 +583,7 @@ const ProfilePage = () => {
       // 小数值显示6位小数
       return usdtAmount.toFixed(6);
     }
-  }, []);
+  }, [usdtDecimalsFactor]);
 
   // 格式化SCIA数量（处理不同类型的输入）
   const formatSCIA = useCallback((amount: any): string => {

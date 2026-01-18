@@ -80,10 +80,23 @@ const PrivateSalePage: React.FC = () => {
     referrer: ''
   });
 
+  // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
+  const { data: usdtDecimals } = useContractRead({
+    address: USDT_ADDRESS,
+    abi: usdtAbi,
+    functionName: 'decimals',
+    query: {
+      enabled: !!isConnected, // 只有连接时才查询
+    },
+  });
+  
+  // 计算小数位数转换因子
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
+
   // 计算预估金额和代币数量（主网：100 USDT 一个包，1000 SCIA）
   const estimatedUSDT = packages * 100;
   const estimatedSCIA = packages * 1000;
-  const requiredUSDTWei = BigInt(Math.ceil(estimatedUSDT * 10 ** 6)); // USDT使用6位小数（BSC主网）
+  const requiredUSDTWei = BigInt(Math.ceil(estimatedUSDT * usdtDecimalsFactor)); // 使用动态获取的USDT小数位数
 
   // 获取USDT余额
   const { data: usdtBalance, isLoading: isUSDTBalanceLoading } = useContractRead({
@@ -158,7 +171,7 @@ const PrivateSalePage: React.FC = () => {
   // 检查USDT余额是否足够
   const isBalanceSufficient = (): boolean => {
     if (!usdtBalance) return true; // 初始状态下允许提交，后续会检查
-    const balance = Number(usdtBalance) / 10 ** 6; // USDT使用6位小数（BSC主网）
+    const balance = Number(usdtBalance) / usdtDecimalsFactor; // 使用动态获取的USDT小数位数
     return balance >= estimatedUSDT;
   };
 
@@ -371,7 +384,7 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
       
       // 重新计算所需USDT
       const updatedEstimatedUSDT = packagesToBuy * 100;
-      const updatedRequiredUSDTWei = BigInt(Math.ceil(updatedEstimatedUSDT * 10 ** 6)); // USDT使用6位小数（BSC主网）
+      const updatedRequiredUSDTWei = BigInt(Math.ceil(updatedEstimatedUSDT * usdtDecimalsFactor)); // 使用动态获取的USDT小数位数
       
       // 检查钱包连接
       if (!isConnected || !userAddress) {
@@ -402,7 +415,7 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
 
       // 检查余额（只在usdtBalance存在时检查）
       if (usdtBalance) {
-        const balanceInUSDT = Number(usdtBalance) / 10 ** 6; // USDT使用6位小数（BSC主网）
+        const balanceInUSDT = Number(usdtBalance) / usdtDecimalsFactor; // 使用动态获取的USDT小数位数
         if (balanceInUSDT < updatedEstimatedUSDT) {
           message.error('USDT余额不足');
           setTransactionStatus('');
@@ -739,7 +752,7 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
                       </Text>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Text style={{ color: COLORS.textPrimary, fontSize: FONT_SIZES.bodyLarge, fontWeight: 'bold', lineHeight: LINE_HEIGHTS.title }}>
-                          {isUSDTBalanceLoading ? '...' : `${usdtBalance ? (Number(usdtBalance) / 10 ** 6).toFixed(4) : '0'} USDT`}
+                          {isUSDTBalanceLoading ? '...' : `${usdtBalance ? (Number(usdtBalance) / usdtDecimalsFactor).toFixed(4) : '0'} USDT`}
                         </Text>
                         {typeof usdtBalance === 'bigint' && !isBalanceSufficient() && (
                           <Tag color="error" style={{ fontSize: FONT_SIZES.bodySmall }}>{t('insufficientBalance')}</Tag>
@@ -752,7 +765,7 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
                           {isUSDTAllowanceLoading ? t('loading') : t('usdtAllowance')}
                         </Text>
                         <Text style={{ color: COLORS.textPrimary, fontSize: FONT_SIZES.bodyLarge, fontWeight: 'bold', lineHeight: LINE_HEIGHTS.title }}>
-                          {isUSDTAllowanceLoading ? '...' : `${usdtAllowance ? (Number(usdtAllowance) / 10 ** 6).toFixed(4) : '0'} USDT`}
+                          {isUSDTAllowanceLoading ? '...' : `${usdtAllowance ? (Number(usdtAllowance) / usdtDecimalsFactor).toFixed(4) : '0'} USDT`}
                         </Text>
                       </div>
                       {typeof usdtAllowance === 'bigint' && !isAllowanceSufficient() && (

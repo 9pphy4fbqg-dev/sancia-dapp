@@ -1,7 +1,7 @@
 {
   "name": "scia-dapp",
   "private": true,
-  "version": "V1.0.01",
+  "version": "V1.0.02",
   "type": "module",
   "scripts": {
     "dev": "vite",

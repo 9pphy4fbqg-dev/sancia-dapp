@@ -16,15 +16,16 @@ import {
 
 import { privateSaleAbi } from '../abi/privateSale';
 import { referralCenterAbi } from '../abi/referralCenter';
+import { usdtAbi } from '../abi/usdt';
 import { useLanguage } from '../contexts/LanguageContext';
 
 // 获取合约地址
 const PRIVATE_SALE_CONTRACT_ADDRESS = import.meta.env.REACT_APP_PRIVATE_SALE_CONTRACT_ADDRESS as `0x${string}`;
 const REFERRAL_CENTER_ADDRESS = import.meta.env.REACT_APP_REFERRAL_CENTER_ADDRESS as `0x${string}`;
+const USDT_ADDRESS = import.meta.env.REACT_APP_USDT_ADDRESS as `0x${string}`;
 
 // 常量定义
 const REFRESH_INTERVAL = 5000; // 5秒刷新一次
-const WEI_TO_USDT = 10 ** 6; // wei到USDT的转换因子（BSC主网USDT使用6位小数）
 
 // 色彩主题定义
 const COLORS = {
@@ -98,6 +99,19 @@ const StatisticsPage = () => {
   const [deviceType, setDeviceType] = useState<string>('unknown');
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const { t } = useLanguage();
+
+  // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
+  const { data: usdtDecimals } = useContractRead({
+    address: USDT_ADDRESS,
+    abi: usdtAbi,
+    functionName: 'decimals',
+    query: {
+      enabled: true,
+    },
+  });
+  
+  // 计算小数位数转换因子
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
 
   // 测试数据验证 - 使用当前连接的钱包地址
   const { address: connectedWalletAddress, isConnected } = useAccount();
