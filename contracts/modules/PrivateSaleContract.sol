@@ -27,7 +27,7 @@ contract PrivateSaleContract is Ownable, ReentrancyGuard {
     
     // 私募参数
     uint256 public constant PRICE_PER_TOKEN = 1 * 10**17; // 1 SCIA = 0.1 USDT
-    uint256 public constant PER_PACKAGE_USDT = 100 * 10**6; // 100 USDT per package (6 decimals)
+    uint256 public constant PER_PACKAGE_USDT = 100 * 10**18; // 100 USDT per package
     uint256 public constant PER_PACKAGE_SCIAs = 1000 * 10**18; // 1000 SCIA per package
     uint256 public constant MIN_PACKAGES = 1; // Minimum 1 package
     uint256 public constant MAX_PACKAGES = 1000; // Maximum 1000 packages
@@ -183,7 +183,7 @@ contract PrivateSaleContract is Ownable, ReentrancyGuard {
             emit ReferralRewardDistributed(referrer, sciaReward, usdtReward);
         }
         
-        // 给购买者更新积分 - 直接使用USDT金额（6位小数）作为积分
+        // 给购买者更新积分
         referralCenter.updatePoints(msg.sender, usdtAmount);
         // 检查购买者徽章资格
         referralCenter.checkBadgeEligibility(msg.sender);

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useContractRead } from 'wagmi';
 import { useAccount } from 'wagmi';
 import { referralCenterAbi } from '../abi/referralCenter';
@@ -103,17 +103,28 @@ const ProfilePage = () => {
   const { t } = useLanguage();
   
   // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
-  const { data: usdtDecimals } = useContractRead({
+  // 注意：新部署的合约使用18位小数，所以默认值改为18
+  const { data: usdtDecimals, isLoading: isDecimalsLoading, error: decimalsError } = useContractRead({
     address: USDT_ADDRESS,
     abi: usdtAbi,
     functionName: 'decimals',
     query: {
-      enabled: true,
+      enabled: true, // 始终查询
+      refetchOnMount: true,
+      refetchOnReconnect: true,
     },
   });
   
+  // 调试：打印错误信息
+  React.useEffect(() => {
+    if (decimalsError) {
+      console.error('Failed to get USDT decimals:', decimalsError);
+    }
+  }, [decimalsError]);
+  
   // 计算小数位数转换因子
-  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
+  // 新部署的合约使用18位小数，所以默认值改为18
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 18);
   
   // 推荐树模态框状态
   const [treeModalVisible, setTreeModalVisible] = React.useState(false);
@@ -977,7 +988,7 @@ const ProfilePage = () => {
                           aspectRatio: '1/1'
                         }}>
                           <QRCodeSVG 
-                            value={`https://scia-dapp.com?ref=${userAddress}`} 
+                            value={`${window.location.origin}?ref=${userAddress}`} 
                             size={200} 
                             level="H" 
                             includeMargin={false} 
@@ -992,7 +1003,7 @@ const ProfilePage = () => {
                           icon={<DownloadOutlined />}
                           onClick={() => {
                             // 生成真实的二维码并下载
-                            const qrValue = `https://scia-dapp.com?ref=${userAddress}`;
+                            const qrValue = `${window.location.origin}?ref=${userAddress}`;
                                
                             // 创建一个临时容器来渲染二维码
                             const tempContainer = document.createElement('div');
@@ -1050,7 +1061,7 @@ ${qrCodeHtml}`;
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                             <input
                               type="text"
-                              value={`https://scia-dapp.com?ref=${userAddress || '0x0000000000000000000000000000000000000000'}`}
+                              value={`${window.location.origin}?ref=${userAddress || '0x0000000000000000000000000000000000000000'}`}
                               readOnly
                               style={{
                                 flex: 1,
@@ -1067,14 +1078,44 @@ ${qrCodeHtml}`;
                               size="middle"
                               icon={<CopyOutlined />}
                               onClick={() => {
-                                const referralLink = `https://scia-dapp.com?ref=${userAddress || '0x0000000000000000000000000000000000000000'}`;
-                                navigator.clipboard.writeText(referralLink)
-                                  .then(() => {
-                                    message.success(t('copySuccess'));
-                                  })
-                                  .catch(() => {
+                                const referralLink = `${window.location.origin}?ref=${userAddress || '0x0000000000000000000000000000000000000000'}`;
+                                
+                                // 尝试使用navigator.clipboard API
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                  navigator.clipboard.writeText(referralLink)
+                                    .then(() => {
+                                      message.success(t('copySuccess'));
+                                    })
+                                    .catch(() => {
+                                      // API调用失败，使用备选方案
+                                      fallbackCopyTextToClipboard(referralLink);
+                                    });
+                                } else {
+                                  // 不支持navigator.clipboard API，使用备选方案
+                                  fallbackCopyTextToClipboard(referralLink);
+                                }
+                                
+                                // 备选复制方案
+                                function fallbackCopyTextToClipboard(text: string) {
+                                  const textArea = document.createElement('textarea');
+                                  textArea.value = text;
+                                  textArea.style.position = 'fixed'; // 避免滚动到页面底部
+                                  textArea.style.opacity = '0';
+                                  document.body.appendChild(textArea);
+                                  textArea.focus();
+                                  textArea.select();
+                                  try {
+                                    const successful = document.execCommand('copy');
+                                    if (successful) {
+                                      message.success(t('copySuccess'));
+                                    } else {
+                                      message.error(t('copyFailed'));
+                                    }
+                                  } catch (err) {
                                     message.error(t('copyFailed'));
-                                  });
+                                  }
+                                  document.body.removeChild(textArea);
+                                }
                               }}
                               style={{ whiteSpace: 'nowrap' }}
                             >

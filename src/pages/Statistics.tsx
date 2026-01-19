@@ -1,5 +1,5 @@
-import { useContractRead, useAccount } from 'wagmi';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useContractRead, useAccount, useWatchContractEvent } from 'wagmi';
 import { Card, Row, Col, Statistic, Spin, Typography, Progress, Tag } from 'antd';
 import {
   DollarCircleOutlined,
@@ -101,17 +101,28 @@ const StatisticsPage = () => {
   const { t } = useLanguage();
 
   // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
-  const { data: usdtDecimals } = useContractRead({
+  // 注意：新部署的合约使用18位小数，所以默认值改为18
+  const { data: usdtDecimals, isLoading: isDecimalsLoading, error: decimalsError } = useContractRead({
     address: USDT_ADDRESS,
     abi: usdtAbi,
     functionName: 'decimals',
     query: {
-      enabled: true,
+      enabled: true, // 始终查询
+      refetchOnMount: true,
+      refetchOnReconnect: true,
     },
   });
   
+  // 调试：打印错误信息
+  React.useEffect(() => {
+    if (decimalsError) {
+      console.error('Failed to get USDT decimals:', decimalsError);
+    }
+  }, [decimalsError]);
+  
   // 计算小数位数转换因子
-  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
+  // 新部署的合约使用18位小数，所以默认值改为18
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 18);
 
   // 测试数据验证 - 使用当前连接的钱包地址
   const { address: connectedWalletAddress, isConnected } = useAccount();
@@ -352,6 +363,19 @@ const StatisticsPage = () => {
   const isDataIntegrityValid = verifyDataIntegrity();
 
   // 获取徽章数量统计
+  const { data: noneCount } = useContractRead({
+    address: REFERRAL_CENTER_ADDRESS,
+    abi: referralCenterAbi,
+    functionName: 'getBadgeCount',
+    args: [BadgeLevel.None],
+    query: {
+      enabled: true,
+      refetchInterval: REFRESH_INTERVAL,
+      retry: 1,
+      staleTime: 10000
+    }
+  });
+
   const { data: memberCount } = useContractRead({
     address: REFERRAL_CENTER_ADDRESS,
     abi: referralCenterAbi,
@@ -403,6 +427,18 @@ const StatisticsPage = () => {
       staleTime: 10000
     }
   });
+
+  // 调试日志：查看徽章数量的值
+  React.useEffect(() => {
+    console.log('Badge counts:', {
+      noneCount: Number(noneCount),
+      memberCount: Number(memberCount),
+      cityCount: Number(cityCount),
+      provinceCount: Number(provinceCount),
+      nationalCount: Number(nationalCount),
+      total: Number(noneCount) + Number(memberCount) + Number(cityCount) + Number(provinceCount) + Number(nationalCount)
+    });
+  }, [noneCount, memberCount, cityCount, provinceCount, nationalCount]);
 
   // 计算销售进度
   const calculateSaleProgress = () => {
@@ -509,7 +545,7 @@ const StatisticsPage = () => {
             }} hoverable>
               <Statistic
                 title={<Text style={{ color: COLORS.textSecondary, fontSize: FONT_SIZES.bodyMedium, lineHeight: LINE_HEIGHTS.body }}>{t('participants')}</Text>}
-                value={Number(memberCount) + Number(cityCount) + Number(provinceCount) + Number(nationalCount) || 0}
+                value={Number(noneCount) + Number(memberCount) + Number(cityCount) + Number(provinceCount) + Number(nationalCount) || 0}
                 valueStyle={{ color: COLORS.badgeProvince, fontSize: '28px', fontWeight: 'bold', lineHeight: LINE_HEIGHTS.title }}
                 suffix={<Text style={{ color: COLORS.textSecondary, fontSize: FONT_SIZES.bodyMedium }}>人</Text>}
                 prefix={<UserOutlined style={{ color: COLORS.badgeProvince, fontSize: FONT_SIZES.titleSmall }} />}

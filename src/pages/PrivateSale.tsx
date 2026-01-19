@@ -81,17 +81,28 @@ const PrivateSalePage: React.FC = () => {
   });
 
   // 关键修复：显式调用USDT合约的decimals函数，获取实际小数位数
-  const { data: usdtDecimals } = useContractRead({
+  // 注意：新部署的合约使用18位小数，所以默认值改为18
+  const { data: usdtDecimals, isLoading: isDecimalsLoading, error: decimalsError } = useContractRead({
     address: USDT_ADDRESS,
     abi: usdtAbi,
     functionName: 'decimals',
     query: {
-      enabled: !!isConnected, // 只有连接时才查询
+      enabled: true, // 始终查询，不管是否连接钱包
+      refetchOnMount: true,
+      refetchOnReconnect: true,
     },
   });
   
+  // 调试：打印错误信息
+  React.useEffect(() => {
+    if (decimalsError) {
+      console.error('Failed to get USDT decimals:', decimalsError);
+    }
+  }, [decimalsError]);
+  
   // 计算小数位数转换因子
-  const usdtDecimalsFactor = 10 ** (usdtDecimals || 6); // 默认使用6位小数（BSC主网USDT）
+  // 新部署的合约使用18位小数，所以默认值改为18
+  const usdtDecimalsFactor = 10 ** (usdtDecimals || 18);
 
   // 计算预估金额和代币数量（主网：100 USDT 一个包，1000 SCIA）
   const estimatedUSDT = packages * 100;
