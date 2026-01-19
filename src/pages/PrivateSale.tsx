@@ -6,6 +6,10 @@ import { usdtAbi } from '../abi/usdt';
 import { referralCenterAbi } from '../abi/referralCenter';
 import { ShoppingCartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useLanguage } from '../contexts/LanguageContext';
+// 导入广告图片
+import adImage from '../assets/simuguanggao.png';
+import adImage2 from '../assets/2.png';
+import adImage3 from '../assets/3.png';
 
 // 色彩主题定义 - 与数据页面保持一致
 const COLORS = {
@@ -512,18 +516,100 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
   };
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#000000', minHeight: 'calc(100vh - 180px)' }}>
-      <Title level={2} style={{ 
-        color: COLORS.textPrimary, 
-        textAlign: 'center', 
-        marginBottom: '30px',
-        fontSize: FONT_SIZES.titleLarge,
-        fontWeight: 'bold',
-        lineHeight: LINE_HEIGHTS.title
+    <div style={{ 
+      backgroundColor: '#000000', 
+      minHeight: 'calc(100vh - 180px)',
+      margin: '0',
+      padding: '0',
+      width: '100%',
+      boxSizing: 'border-box'
+    }}>
+      {/* 广告板块 - 顶部全宽广告 */}
+      <div style={{ 
+        width: '100%',
+        height: 'auto',
+        margin: '0',
+        padding: '0',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+        backgroundColor: '#000000',
+        position: 'relative'
       }}>
-        <ShoppingCartOutlined style={{ marginRight: '10px', fontSize: FONT_SIZES.titleMedium }} />
-        {t('privateSale')}
-      </Title>
+        <img
+          src={adImage}
+          alt="SCIA Advertisement"
+          style={{
+            width: '100%',
+            height: 'auto',
+            objectFit: 'fill',
+            display: 'block',
+            margin: '0',
+            padding: '0',
+            boxSizing: 'border-box'
+          }}
+        />
+        
+        {/* 透明点击按钮 - 覆盖在"点击认购"位置，跳转到购买板块 */}
+        <button
+          onClick={() => {
+            const buySection = document.getElementById('buy-section');
+            if (buySection) {
+              buySection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+          style={{
+            position: 'absolute',
+            bottom: '10%',
+            right: '20%',
+            width: '200px',
+            height: '60px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            zIndex: '10',
+            display: 'block'
+          }}
+        />
+      </div>
+      
+      {/* 第二个广告图片 - 与第一个广告图片相同的布局 */}
+      <div style={{ 
+        width: '100%',
+        height: 'auto',
+        margin: '0',
+        padding: '0',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+        backgroundColor: '#000000'
+      }}>
+        <img
+          src={adImage2}
+          alt="SCIA Advertisement 2"
+          style={{
+            width: '100%',
+            height: 'auto',
+            objectFit: 'fill',
+            display: 'block',
+            margin: '0',
+            padding: '0',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
+      {/* 主内容容器 - 购买板块 */}
+      <div id="buy-section" style={{ padding: '20px', backgroundColor: '#000000', boxSizing: 'border-box' }}>
+        <Title level={2} style={{ 
+          color: COLORS.textPrimary, 
+          textAlign: 'center', 
+          marginBottom: '30px',
+          fontSize: FONT_SIZES.titleLarge,
+          fontWeight: 'bold',
+          lineHeight: LINE_HEIGHTS.title
+        }}>
+          <ShoppingCartOutlined style={{ marginRight: '10px', fontSize: FONT_SIZES.titleMedium }} />
+          {t('privateSale')}
+        </Title>
 
       {/* 加载状态 */}
       <Spin
@@ -859,6 +945,40 @@ ${t('transactionHash')}: ${approvalHash.substring(0, 10)}...${approvalHash.subst
           </Card>
         </div>
       </Spin>
+      </div>
+      
+      {/* 第三个广告图片 - 页面最底部，与其他广告相同的布局 */}
+      <div style={{ 
+        width: '100%',
+        height: 'auto',
+        margin: '0',
+        padding: '0',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+        backgroundColor: '#000000'
+      }}>
+        <img
+          src={adImage3}
+          alt="SCIA Advertisement 3"
+          style={{
+            width: '100%',
+            height: 'auto',
+            objectFit: 'fill',
+            display: 'block',
+            margin: '0',
+            padding: '0',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+      
+      {/* 空白占位符 - 防止内容被底部导航栏覆盖 */}
+      <div style={{ 
+        height: '60px',
+        backgroundColor: '#000000',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}></div>
     </div>
   );
 };
