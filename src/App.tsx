@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import PrivateSalePage from './pages/PrivateSale';
 import ProfilePage from './pages/Profile';
 import Layout from './pages/Layout';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
             <Route path="/me" element={<ProfilePage />} />
           </Route>
         </Routes>
+        <Analytics />
       </Router>
     </LanguageProvider>
   );
