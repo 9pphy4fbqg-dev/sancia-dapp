@@ -15,5 +15,5 @@ export default defineConfig({
       }
     }
   },
-  envPrefix: 'REACT_APP_' // 支持REACT_APP_前缀的环境变量
+  envPrefix: ['REACT_APP_', 'VITE_'] // 支持REACT_APP_和VITE_前缀的环境变量
 })
