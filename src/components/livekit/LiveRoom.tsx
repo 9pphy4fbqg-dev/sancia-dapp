@@ -126,11 +126,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       
       setIsPublishing(true);
       console.log('✅ 已开始直播');
-      message.success('已开始直播');
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '发布直播流失败';
       console.error('❌ 发布直播流失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isPublisher, isCameraEnabled, isMicrophoneEnabled]);
   
@@ -145,11 +145,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       
       setIsPublishing(false);
       console.log('✅ 已停止直播');
-      message.success('已停止直播');
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '停止直播流失败';
       console.error('❌ 停止直播流失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isPublisher]);
   
@@ -162,11 +162,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       await roomRef.current.localParticipant.setMicrophoneEnabled(newState);
       setIsMicrophoneEnabled(newState);
       setIsAudioEnabled(newState); // 保持状态同步
-      message.info(newState ? '麦克风已开启' : '麦克风已关闭');
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '切换麦克风状态失败';
       console.error('❌ 切换麦克风状态失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isMicrophoneEnabled]);
   
@@ -179,11 +179,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       await roomRef.current.localParticipant.setCameraEnabled(newState);
       setIsCameraEnabled(newState);
       setIsVideoEnabled(newState); // 保持状态同步
-      message.info(newState ? '摄像头已开启' : '摄像头已关闭');
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '切换摄像头状态失败';
       console.error('❌ 切换摄像头状态失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isCameraEnabled]);
   
@@ -198,17 +198,17 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
         // 开始屏幕分享
         await roomRef.current.localParticipant.setScreenShareEnabled(true);
         setIsSharingScreen(true);
-        message.success('屏幕分享已开启');
+
       } else {
         // 停止屏幕分享
         await roomRef.current.localParticipant.setScreenShareEnabled(false);
         setIsSharingScreen(false);
-        message.success('屏幕分享已关闭');
+
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '切换屏幕分享状态失败';
       console.error('❌ 切换屏幕分享状态失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isSharingScreen, isPublisher]);
   
@@ -240,7 +240,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
   const handleShare = useCallback(() => {
     // 实现分享逻辑
     console.log('分享直播间');
-    message.info('分享功能开发中');
   }, []);
   
   // 处理退出直播间
@@ -254,12 +253,12 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       // 断开与LiveKit服务器的连接
       await disconnectFromLiveKit();
       
-      message.success('已退出直播间');
+
       console.log('✅ 已退出直播间');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '退出直播间失败';
       console.error('❌ 退出直播间失败:', error);
-      message.error(errorMessage);
+
     }
   }, [isPublishing, stopPublishStream, disconnectFromLiveKit]);
 
@@ -297,7 +296,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
             console.log('✅ 已连接到LiveKit服务器');
             setIsLoading(false);
             setConnectionError(null);
-            message.success('已连接到直播服务器');
             break;
           case ConnectionState.Connecting:
             console.log('🔄 正在连接到LiveKit服务器...');
@@ -305,7 +303,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
           case ConnectionState.Disconnected:
             console.log('❌ 已断开与LiveKit服务器的连接');
             setIsLoading(false);
-            message.info('已断开与直播服务器的连接');
             break;
           case ConnectionState.Reconnecting:
             console.log('🔄 正在重新连接到LiveKit服务器...');
@@ -322,7 +319,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       setConnectionError(errorMessage);
       setIsLoading(false);
       console.error('❌ 连接LiveKit服务器失败:', error);
-      message.error(errorMessage);
+
     }
   }, [roomId, token]);
   
