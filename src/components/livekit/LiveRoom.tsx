@@ -70,6 +70,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
   // LiveKit Room实例
   const roomRef = useRef<Room | null>(null);
   
+  // 视频元素引用
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideosRef = useRef<{ [key: string]: HTMLVideoElement | null }>({});
+  const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
+  
   // 处理消息发送
   const handleSendMessage = useCallback(() => {
     if (isMuted) {
@@ -307,6 +312,89 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
     console.log('分享直播间');
   }, []);
   
+  // 处理媒体轨道
+  const handleTrack = useCallback((trackPublication: any, track: MediaStreamTrack, isLocal: boolean, participantIdentity?: string) => {
+    const trackId = trackPublication.sid;
+    
+    if (track.kind === 'video') {
+      // 处理视频轨道
+      const mediaStream = new MediaStream([track]);
+      
+      if (isLocal) {
+        // 本地视频
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = mediaStream;
+          localVideoRef.current.play().catch(err => console.error('❌ 本地视频播放失败:', err));
+        }
+      } else {
+        // 远程视频
+        if (participantIdentity) {
+          const videoElement = remoteVideosRef.current[participantIdentity];
+          if (videoElement) {
+            videoElement.srcObject = mediaStream;
+            videoElement.play().catch(err => console.error('❌ 远程视频播放失败:', err));
+          }
+        }
+      }
+    } else if (track.kind === 'audio') {
+      // 处理音频轨道
+      const mediaStream = new MediaStream([track]);
+      
+      if (!isLocal && participantIdentity) {
+        // 远程音频
+        const audioElement = audioRefs.current[participantIdentity];
+        if (audioElement) {
+          audioElement.srcObject = mediaStream;
+          audioElement.play().catch(err => console.error('❌ 远程音频播放失败:', err));
+        }
+      }
+      // 本地音频自动播放，无需额外处理
+    }
+  }, []);
+  
+  // 处理轨道取消发布
+  const handleTrackUnpublished = useCallback((trackPublication: any, isLocal: boolean, participantIdentity?: string) => {
+    if (trackPublication.track?.kind === 'video') {
+      if (isLocal) {
+        // 清理本地视频
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = null;
+        }
+      } else if (participantIdentity) {
+        // 清理远程视频
+        const videoElement = remoteVideosRef.current[participantIdentity];
+        if (videoElement) {
+          videoElement.srcObject = null;
+        }
+      }
+    } else if (trackPublication.track?.kind === 'audio') {
+      if (!isLocal && participantIdentity) {
+        // 清理远程音频
+        const audioElement = audioRefs.current[participantIdentity];
+        if (audioElement) {
+          audioElement.srcObject = null;
+        }
+      }
+    }
+  }, []);
+  
+  // 移除参与者媒体元素
+  const removeParticipantMediaElements = useCallback((participantIdentity: string) => {
+    // 清理远程视频
+    const videoElement = remoteVideosRef.current[participantIdentity];
+    if (videoElement) {
+      videoElement.srcObject = null;
+      delete remoteVideosRef.current[participantIdentity];
+    }
+    
+    // 清理远程音频
+    const audioElement = audioRefs.current[participantIdentity];
+    if (audioElement) {
+      audioElement.srcObject = null;
+      delete audioRefs.current[participantIdentity];
+    }
+  }, []);
+  
   // 处理退出直播间
   const handleExitLiveRoom = useCallback(async () => {
     try {
@@ -373,6 +461,38 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
             console.log('🔄 正在重新连接到LiveKit服务器...');
             break;
         }
+      });
+      
+      // 本地参与者发布轨道事件
+      room.localParticipant.on('trackPublished', (publication) => {
+        console.log('✅ 本地轨道已发布:', publication.trackName);
+        if (publication.track) {
+          handleTrack(publication, publication.track.mediaStreamTrack, true);
+        }
+      });
+      
+      // 本地参与者取消发布轨道事件
+      room.localParticipant.on('trackUnpublished', (publication) => {
+        console.log('✅ 本地轨道已取消发布:', publication.trackName);
+        handleTrackUnpublished(publication, true);
+      });
+      
+      // 订阅远程参与者轨道事件
+      room.on('trackSubscribed', (track, publication, participant) => {
+        console.log('✅ 已订阅远程轨道:', publication.trackName, 'from', participant.identity);
+        handleTrack(publication, track.mediaStreamTrack, false, participant.identity);
+      });
+      
+      // 取消订阅远程参与者轨道事件
+      room.on('trackUnsubscribed', (track, publication, participant) => {
+        console.log('✅ 已取消订阅远程轨道:', publication.trackName, 'from', participant.identity);
+        handleTrackUnpublished(publication, false, participant.identity);
+      });
+      
+      // 远程参与者离开事件
+      room.on('participantDisconnected', (participant) => {
+        console.log('✅ 参与者已离开:', participant.identity);
+        removeParticipantMediaElements(participant.identity);
       });
       
       // 连接到LiveKit服务器
@@ -482,6 +602,57 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
             </Typography.Text>
           </div>
         )}
+        
+        {/* 视频和音频元素 */}
+        {/* 本地视频 - 仅主播可见 */}
+        {isPublisher && (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              width: '150px',
+              height: '200px',
+              borderRadius: '8px',
+              objectFit: 'cover',
+              zIndex: 5,
+              backgroundColor: '#000',
+              border: '2px solid rgba(255, 255, 255, 0.3)'
+            }}
+          />
+        )}
+        
+        {/* 主视频区域 - 显示远程视频或本地视频 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1
+          }}
+        >
+          {/* 主视频元素 - 用于显示当前说话者或主要内容 */}
+          <video
+            autoPlay
+            playsInline
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              backgroundColor: '#000'
+            }}
+            // 这里可以根据需要动态设置ref，例如显示第一个远程参与者或当前说话者
+          />
+        </div>
         
         {/* 渐变遮罩 */}
         <div
