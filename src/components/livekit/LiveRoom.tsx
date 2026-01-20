@@ -115,11 +115,63 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
     }
   }, []);
   
+  // 请求摄像头权限
+  const requestCameraPermission = useCallback(async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      console.log('✅ 已获取摄像头权限');
+      return true;
+    } catch (error) {
+      console.error('❌ 获取摄像头权限失败:', error);
+      return false;
+    }
+  }, []);
+
+  // 请求麦克风权限
+  const requestMicrophonePermission = useCallback(async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ 已获取麦克风权限');
+      return true;
+    } catch (error) {
+      console.error('❌ 获取麦克风权限失败:', error);
+      return false;
+    }
+  }, []);
+
+  // 请求屏幕共享权限
+  const requestScreenSharePermission = useCallback(async () => {
+    try {
+      // 尝试获取屏幕共享流
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+      // 立即停止流，因为我们只是在请求权限
+      screenStream.getTracks().forEach(track => track.stop());
+      console.log('✅ 已获取屏幕共享权限');
+      return true;
+    } catch (error) {
+      console.error('❌ 获取屏幕共享权限失败:', error);
+      return false;
+    }
+  }, []);
+
   // 发布音视频流
   const publishStream = useCallback(async () => {
     if (!roomRef.current || !isPublisher) return;
     
     try {
+      // 请求摄像头权限
+      if (isCameraEnabled) {
+        await requestCameraPermission();
+      }
+      
+      // 请求麦克风权限
+      if (isMicrophoneEnabled) {
+        await requestMicrophonePermission();
+      }
+
       // 发布摄像头和麦克风
       await roomRef.current.localParticipant.setCameraEnabled(isCameraEnabled);
       await roomRef.current.localParticipant.setMicrophoneEnabled(isMicrophoneEnabled);
@@ -132,7 +184,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       console.error('❌ 发布直播流失败:', error);
 
     }
-  }, [isPublisher, isCameraEnabled, isMicrophoneEnabled]);
+  }, [isPublisher, isCameraEnabled, isMicrophoneEnabled, requestCameraPermission, requestMicrophonePermission]);
   
   // 停止发布音视频流
   const stopPublishStream = useCallback(async () => {
@@ -159,6 +211,12 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
     
     try {
       const newState = !isMicrophoneEnabled;
+      
+      // 如果要开启麦克风，先请求权限
+      if (newState) {
+        await requestMicrophonePermission();
+      }
+      
       await roomRef.current.localParticipant.setMicrophoneEnabled(newState);
       setIsMicrophoneEnabled(newState);
       setIsAudioEnabled(newState); // 保持状态同步
@@ -168,7 +226,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       console.error('❌ 切换麦克风状态失败:', error);
 
     }
-  }, [isMicrophoneEnabled]);
+  }, [isMicrophoneEnabled, requestMicrophonePermission]);
   
   // 切换摄像头开关
   const toggleCamera = useCallback(async () => {
@@ -176,6 +234,12 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
     
     try {
       const newState = !isCameraEnabled;
+      
+      // 如果要开启摄像头，先请求权限
+      if (newState) {
+        await requestCameraPermission();
+      }
+      
       await roomRef.current.localParticipant.setCameraEnabled(newState);
       setIsCameraEnabled(newState);
       setIsVideoEnabled(newState); // 保持状态同步
@@ -185,7 +249,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       console.error('❌ 切换摄像头状态失败:', error);
 
     }
-  }, [isCameraEnabled]);
+  }, [isCameraEnabled, requestCameraPermission]);
   
   // 切换屏幕分享
   const toggleScreenShare = useCallback(async () => {
@@ -195,7 +259,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       const newState = !isSharingScreen;
       
       if (newState) {
-        // 开始屏幕分享
+        // 开始屏幕分享，先请求权限
+        await requestScreenSharePermission();
         await roomRef.current.localParticipant.setScreenShareEnabled(true);
         setIsSharingScreen(true);
 
@@ -210,7 +275,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
       console.error('❌ 切换屏幕分享状态失败:', error);
 
     }
-  }, [isSharingScreen, isPublisher]);
+  }, [isSharingScreen, isPublisher, requestScreenSharePermission]);
   
   // 处理开播/停止直播
   const handleTogglePublishing = useCallback(async () => {
