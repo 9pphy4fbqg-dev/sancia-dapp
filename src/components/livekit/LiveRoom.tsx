@@ -123,6 +123,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
   // 请求摄像头权限
   const requestCameraPermission = useCallback(async () => {
     try {
+      // 显示中文提示，告知用户接下来会看到浏览器权限请求
+      console.log('📷 请在接下来弹出的浏览器提示中，允许访问摄像头');
       await navigator.mediaDevices.getUserMedia({ video: true });
       console.log('✅ 已获取摄像头权限');
       return true;
@@ -135,6 +137,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
   // 请求麦克风权限
   const requestMicrophonePermission = useCallback(async () => {
     try {
+      // 显示中文提示，告知用户接下来会看到浏览器权限请求
+      console.log('🎤 请在接下来弹出的浏览器提示中，允许访问麦克风');
       await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log('✅ 已获取麦克风权限');
       return true;
@@ -147,6 +151,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({
   // 请求屏幕共享权限
   const requestScreenSharePermission = useCallback(async () => {
     try {
+      // 显示中文提示，告知用户接下来会看到浏览器权限请求
+      console.log('🖥️  请在接下来弹出的浏览器提示中，允许屏幕共享');
       // 尝试获取屏幕共享流
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
