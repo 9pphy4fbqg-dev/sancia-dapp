@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { HOST_WALLET_ADDRESS, LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, OFFICIAL_ROOM_ID } from '../../lib/livekit-config';
+import { HOST_WALLET_ADDRESS, LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, OFFICIAL_ROOM_ID, OFFICIAL_HOST_WALLET_ADDRESSES } from '../../lib/livekit-config';
 import { TrackSource } from 'livekit-server-sdk';
 
 export interface LiveKitTokenOptions {
@@ -31,7 +31,7 @@ export const useLiveKitToken = () => {
     try {
       // 验证身份权限
       if (options.room === OFFICIAL_ROOM_ID) {
-        if (options.isPublisher && options.identity.toLowerCase() !== HOST_WALLET_ADDRESS.toLowerCase()) {
+        if (options.isPublisher && !OFFICIAL_HOST_WALLET_ADDRESSES.includes(options.identity.toLowerCase())) {
           throw new Error('只有官方钱包可以在官方直播间发布内容');
         }
       }
