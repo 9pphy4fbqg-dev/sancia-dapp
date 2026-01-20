@@ -207,33 +207,13 @@ const CommunityPage = () => {
       
       {/* 官方直播间 */}
       <div style={{ width: '100%', marginBottom: CARD_MARGIN_BOTTOM, padding: 0, margin: 0 }}>
-        {liveKitToken ? (
-          <LiveRoom
-            roomId={OFFICIAL_ROOM_ID}
-            identity={address || 'anonymous'}
-            token={liveKitToken}
-            isPublisher={OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '')}
-            metadata={{ address }}
-          />
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '400px',
-            backgroundColor: '#111',
-            borderRadius: '12px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            color: '#fff',
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ marginBottom: 16 }}>
-                <Spin tip="正在连接直播间..." size="large" />
-              </div>
-              <p>请先连接钱包以进入直播间</p>
-            </div>
-          </div>
-        )}
+        <LiveRoom
+          roomId={OFFICIAL_ROOM_ID}
+          identity={address || 'anonymous'}
+          token={liveKitToken}
+          isPublisher={OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '')}
+          metadata={{ address }}
+        />
       </div>
 
       {/* 房间列表 */}
@@ -270,7 +250,6 @@ const CommunityPage = () => {
               退出房间
             </Button>
           </div>
-          {liveKitToken ? (
           <LiveRoom
             roomId={selectedRoom.id}
             identity={address || selectedRoom.id}
@@ -282,25 +261,6 @@ const CommunityPage = () => {
             }
             metadata={{ address }}
           />
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '400px',
-            backgroundColor: '#111',
-            borderRadius: '12px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            color: '#fff',
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ marginBottom: 16 }}>
-                <Spin tip="正在连接直播间..." size="large" />
-              </div>
-              <p>请先连接钱包以进入直播间</p>
-            </div>
-          </div>
-        )}
         </div>
       )}
 
