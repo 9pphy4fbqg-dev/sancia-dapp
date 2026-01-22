@@ -73,304 +73,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       return;
     }
     
-    console.log('token有效，开始创建LiveKit房间...');
-    
-    // 断开现有连接（如果有）
-    if (roomRef.current) {
-      console.log('断开现有LiveKit连接...');
-      roomRef.current.disconnect();
-      roomRef.current = null;
-    }
-    
-    // 创建LiveKit房间实例
-    const room = new Room({
-      // 启用自适应流
-      adaptiveStream: true,
-      // 启用dynacast
-      dynacast: true,
-    });
-    roomRef.current = room;
-
-    // 处理连接状态变化
-    room.on(RoomEvent.ConnectionStateChanged, (state) => {
-      console.log('=== LiveKit连接状态变化 ===');
-      console.log('旧状态:', connectionState);
-      console.log('新状态:', state);
-      setConnectionState(state);
-      
-      // 记录连接状态变化的详细信息
-      if (state === ConnectionState.Connecting) {
-        console.log('LiveKit正在连接...');
-      } else if (state === ConnectionState.Connected) {
-        console.log('LiveKit连接成功!');
-      } else if (state === ConnectionState.Disconnected) {
-        console.log('LiveKit连接断开！');
-        console.log('当前roomRef.current:', !!roomRef.current);
-        // 移除手动重连逻辑，让LiveKit内部处理重连
-        // 手动重连可能导致与useEffect依赖项冲突，造成循环重连
-      } else if (state === ConnectionState.Reconnecting) {
-        console.log('LiveKit正在重新连接...');
-      }
-    });
-
-    // 处理连接成功
-    room.on(RoomEvent.Connected, () => {
-      console.log('=== 收到RoomEvent.Connected事件 ===');
-      console.log('LiveKit连接成功!');
-      setError(null);
-    });
-
-    // 处理连接失败
-    room.on(RoomEvent.Disconnected, () => {
-      console.log('=== 收到RoomEvent.Disconnected事件 ===');
-      console.log('LiveKit连接断开!');
-    });
-
-    // 处理远程轨道订阅
-    room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
-      console.log('已订阅远程轨道:', track.kind, 'from', participant.identity);
-      
-      // 确保videoRef.current存在
-      if (!videoRef.current) {
-        console.log('警告：videoRef.current为null，无法处理媒体轨道');
-        return;
-      }
-      
-      // 获取当前视频流或创建新流
-      let currentStream = videoRef.current.srcObject as MediaStream | null;
-      
-      try {
-        // 处理视频轨道
-        if (track.kind === 'video') {
-          // 如果还没有流，创建新流
-          if (!currentStream) {
-            currentStream = new MediaStream();
-          }
-          
-          // 替换现有视频轨道
-          const existingVideoTracks = currentStream.getVideoTracks();
-          existingVideoTracks.forEach(existingTrack => {
-            currentStream!.removeTrack(existingTrack);
-          });
-          currentStream.addTrack(track.mediaStreamTrack);
-          
-          // 确保视频元素配置正确
-          if (videoRef.current.srcObject !== currentStream) {
-            videoRef.current.srcObject = currentStream;
-            videoRef.current.autoplay = true;
-            videoRef.current.playsInline = true;
-            videoRef.current.muted = false; // 允许观众听到声音
-          }
-          console.log('远程视频轨道已成功绑定到视频元素');
-        }
-        
-        // 处理音频轨道
-        if (track.kind === 'audio') {
-          // 如果还没有流，创建新流
-          if (!currentStream) {
-            currentStream = new MediaStream();
-          }
-          
-          // 替换现有音频轨道
-          const existingAudioTracks = currentStream.getAudioTracks();
-          existingAudioTracks.forEach(existingTrack => {
-            currentStream!.removeTrack(existingTrack);
-          });
-          currentStream.addTrack(track.mediaStreamTrack);
-          
-          // 确保视频元素配置正确
-          if (videoRef.current.srcObject !== currentStream) {
-            videoRef.current.srcObject = currentStream;
-            videoRef.current.autoplay = true;
-            videoRef.current.playsInline = true;
-            videoRef.current.muted = false; // 允许观众听到声音
-          }
-          console.log('远程音频轨道已成功绑定到媒体流');
-        }
-      } catch (error) {
-        console.error('处理远程轨道时出错:', error);
-      }
-    });
-
-    // 处理本地轨道发布 - 合并视频和音频轨道处理
-    room.on(RoomEvent.LocalTrackPublished, (publication) => {
-      console.log('本地轨道已发布:', publication.trackName, '源:', publication.source);
-      
-      if (!publication.track) {
-        console.log('警告：publication.track为空');
-        return;
-      }
-      
-      if (publication.track.kind === 'video' || publication.track.kind === 'audio') {
-        console.log('处理本地', publication.track.kind, '轨道:', publication.trackName, '源:', publication.source);
-        
-        // 更新屏幕分享状态
-        if (publication.source === 'screen_share') {
-          setIsScreenSharing(true);
-          console.log('更新屏幕分享状态为: true');
-        }
-        
-        // 确保videoRef.current存在
-        if (!videoRef.current) {
-          console.log('警告：videoRef.current为null，无法处理媒体轨道');
-          return;
-        }
-        
-        // 获取当前流或创建新流
-        let currentStream = videoRef.current.srcObject as MediaStream | null;
-        
-        // 处理视频轨道
-        if (publication.track.kind === 'video') {
-          // 创建包含音频和视频的完整流
-          if (currentStream) {
-            // 如果已有流，替换视频轨道
-            const existingVideoTracks = currentStream.getVideoTracks();
-            existingVideoTracks.forEach(existingTrack => {
-              currentStream!.removeTrack(existingTrack);
-            });
-            currentStream.addTrack(publication.track.mediaStreamTrack);
-          } else {
-            // 创建新流
-            currentStream = new MediaStream([publication.track.mediaStreamTrack]);
-          }
-          
-          // 设置主视频元素
-          videoRef.current.srcObject = currentStream;
-          videoRef.current.autoplay = true;
-          videoRef.current.playsInline = true;
-          videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
-          console.log('本地视频轨道已绑定到主视频元素');
-          
-          // 设置本地预览元素（仅摄像头）
-          if (localVideoRef.current && publication.source !== 'screen_share') {
-            localVideoRef.current.srcObject = new MediaStream([publication.track.mediaStreamTrack]);
-            localVideoRef.current.autoplay = true;
-            localVideoRef.current.playsInline = true;
-            localVideoRef.current.muted = true;
-            console.log('本地视频轨道已绑定到本地预览元素');
-          }
-        }
-        
-        // 处理音频轨道
-        if (publication.track.kind === 'audio') {
-          if (currentStream) {
-            // 如果已有流，添加或替换音频轨道
-            const existingAudioTracks = currentStream.getAudioTracks();
-            existingAudioTracks.forEach(existingTrack => {
-              currentStream!.removeTrack(existingTrack);
-            });
-            currentStream.addTrack(publication.track.mediaStreamTrack);
-            
-            // 更新视频元素的srcObject，确保音频能被听到
-            videoRef.current.srcObject = currentStream;
-            videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
-          } else {
-            // 创建新流
-            currentStream = new MediaStream([publication.track.mediaStreamTrack]);
-            
-            // 设置视频元素的srcObject
-            videoRef.current.srcObject = currentStream;
-            videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
-          }
-          console.log('本地音频轨道已绑定到媒体流和视频元素');
-        }
-      }
-    });
-
-    // 处理本地轨道移除
-    room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
-      console.log('本地轨道已移除:', publication.trackName, '源:', publication.source);
-      
-      if (!videoRef.current) {
-        console.log('警告：videoRef.current为null，无法处理媒体轨道');
-        return;
-      }
-      
-      const currentStream = videoRef.current.srcObject as MediaStream | null;
-      if (!currentStream) {
-        console.log('当前媒体流为null，无法处理轨道移除');
-        return;
-      }
-      
-      if (publication.kind === Track.Kind.Video) {
-        const videoTracks = currentStream.getVideoTracks();
-        videoTracks.forEach(track => {
-          currentStream!.removeTrack(track);
-          console.log('已从媒体流中移除视频轨道');
-        });
-        
-        // 更新本地状态
-        if (publication.source !== 'screen_share') {
-          setIsCameraEnabled(false);
-        } else {
-          setIsScreenSharing(false);
-        }
-      } else if (publication.kind === Track.Kind.Audio) {
-        const audioTracks = currentStream.getAudioTracks();
-        audioTracks.forEach(track => {
-          currentStream!.removeTrack(track);
-          console.log('已从媒体流中移除音频轨道');
-        });
-        
-        // 更新本地状态
-        setIsMicrophoneEnabled(false);
-      }
-      
-      // 确保视频元素仍有srcObject
-      videoRef.current.srcObject = currentStream;
-    });
-
-    // 处理接收到的聊天消息
-    room.on(RoomEvent.DataReceived, (payload, participant, kind) => {
-      console.log('收到数据消息:', payload, '来自:', participant?.identity, '类型:', kind);
-      try {
-        const message = JSON.parse(new TextDecoder().decode(payload));
-        if (message.content && message.from && message.timestamp) {
-          // 确保消息不是自己发送的（避免重复）
-          if (message.from !== identity) {
-            setChatMessages(prev => [...prev, message]);
-          }
-        }
-      } catch (err) {
-        console.error('解析聊天消息失败:', err);
-      }
-    });
-
-    // 连接到LiveKit服务器
-    const connectToLiveKit = async () => {
-      console.log('connectToLiveKit函数被调用！');
-      try {
-        console.log('尝试连接到LiveKit服务器:', LIVEKIT_URL);
-        console.log('使用的token:', token ? '存在' : '不存在', 'token长度:', token?.length);
-        console.log('房间ID:', roomId);
-        console.log('身份:', identity);
-        
-        // 确保token存在
-        if (!token) {
-          const errorMsg = 'LiveKit令牌不存在';
-          setError(errorMsg);
-          console.error(errorMsg);
-          return;
-        }
-        
-        // 连接配置选项
-        const connectOptions: RoomConnectOptions = {
-          autoSubscribe: true,
-        };
-        
-        // 连接到LiveKit服务器
-        console.log('开始调用room.connect()...');
-        await room.connect(LIVEKIT_URL, token, connectOptions);
-        console.log('LiveKit连接成功!');
-      } catch (err) {
-        console.error('LiveKit连接失败:', err);
-        console.error('错误详情:', (err as Error).stack);
-        setError('连接LiveKit服务器失败: ' + (err as Error).message);
-      }
-    };
-
-    // 调用连接函数
-    connectToLiveKit();
+    console.log('LiveRoom组件已加载，等待用户点击开播按钮...');
 
     // 清理函数
     return () => {
@@ -389,12 +92,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
     console.log('当前连接状态:', connectionState);
     console.log('isPublisher:', isPublisher);
     
-    if (!roomRef.current) {
-      console.error('无法开播：roomRef.current为null');
-      setError('房间未初始化，请重试');
-      return;
-    }
-
     try {
       console.log('=== 开始执行togglePublishing ===');
       console.log('当前isPublishing状态:', isPublishing);
@@ -404,8 +101,10 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         console.log('停止直播，断开服务器连接...');
         
         // 断开与LiveKit服务器的连接
-        roomRef.current.disconnect();
-        roomRef.current = null;
+        if (roomRef.current) {
+          roomRef.current.disconnect();
+          roomRef.current = null;
+        }
         
         // 更新所有状态
         setIsPublishing(false);
@@ -415,16 +114,252 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         
         console.log('已停止直播并断开服务器连接');
       } else {
-        // 开始直播 - 连接服务器
+        // 开始直播 - 创建房间实例并连接服务器
         console.log('开始直播...');
         
-        // 检查连接状态，如果已连接直接开始直播
-        if (connectionState === ConnectionState.Connected) {
-          console.log('已连接到服务器，开始发布流');
-          setIsPublishing(true);
+        // 1. 创建LiveKit房间实例
+        const room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+        });
+        roomRef.current = room;
+
+        // 处理连接状态变化
+        room.on(RoomEvent.ConnectionStateChanged, (state) => {
+          console.log('=== LiveKit连接状态变化 ===');
+          console.log('旧状态:', connectionState);
+          console.log('新状态:', state);
+          setConnectionState(state);
+          
+          if (state === ConnectionState.Connecting) {
+            console.log('LiveKit正在连接...');
+          } else if (state === ConnectionState.Connected) {
+            console.log('LiveKit连接成功!');
+          } else if (state === ConnectionState.Disconnected) {
+            console.log('LiveKit连接断开！');
+          } else if (state === ConnectionState.Reconnecting) {
+            console.log('LiveKit正在重新连接...');
+          }
+        });
+
+        // 处理连接成功
+        room.on(RoomEvent.Connected, () => {
+          console.log('=== 收到RoomEvent.Connected事件 ===');
+          console.log('LiveKit连接成功!');
+          setError(null);
+        });
+
+        // 处理连接失败
+        room.on(RoomEvent.Disconnected, () => {
+          console.log('=== 收到RoomEvent.Disconnected事件 ===');
+          console.log('LiveKit连接断开!');
+        });
+
+        // 处理远程轨道订阅
+        room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
+          console.log('已订阅远程轨道:', track.kind, 'from', participant.identity);
+          
+          if (!videoRef.current) {
+            console.log('警告：videoRef.current为null，无法处理媒体轨道');
+            return;
+          }
+          
+          let currentStream = videoRef.current.srcObject as MediaStream | null;
+          
+          try {
+            if (track.kind === 'video') {
+              if (!currentStream) {
+                currentStream = new MediaStream();
+              }
+              
+              const existingVideoTracks = currentStream.getVideoTracks();
+              existingVideoTracks.forEach(existingTrack => {
+                currentStream!.removeTrack(existingTrack);
+              });
+              currentStream.addTrack(track.mediaStreamTrack);
+              
+              if (videoRef.current.srcObject !== currentStream) {
+                videoRef.current.srcObject = currentStream;
+                videoRef.current.autoplay = true;
+                videoRef.current.playsInline = true;
+                videoRef.current.muted = false;
+              }
+              console.log('远程视频轨道已成功绑定到视频元素');
+            }
+            
+            if (track.kind === 'audio') {
+              if (!currentStream) {
+                currentStream = new MediaStream();
+              }
+              
+              const existingAudioTracks = currentStream.getAudioTracks();
+              existingAudioTracks.forEach(existingTrack => {
+                currentStream!.removeTrack(existingTrack);
+              });
+              currentStream.addTrack(track.mediaStreamTrack);
+              
+              if (videoRef.current.srcObject !== currentStream) {
+                videoRef.current.srcObject = currentStream;
+                videoRef.current.autoplay = true;
+                videoRef.current.playsInline = true;
+                videoRef.current.muted = false;
+              }
+              console.log('远程音频轨道已成功绑定到媒体流');
+            }
+          } catch (error) {
+            console.error('处理远程轨道时出错:', error);
+          }
+        });
+
+        // 处理本地轨道发布
+        room.on(RoomEvent.LocalTrackPublished, (publication) => {
+          console.log('本地轨道已发布:', publication.trackName, '源:', publication.source);
+          
+          if (!publication.track) {
+            console.log('警告：publication.track为空');
+            return;
+          }
+          
+          if (publication.track.kind === 'video' || publication.track.kind === 'audio') {
+            console.log('处理本地', publication.track.kind, '轨道:', publication.trackName, '源:', publication.source);
+            
+            if (publication.source === 'screen_share') {
+              setIsScreenSharing(true);
+              console.log('更新屏幕分享状态为: true');
+            }
+            
+            if (!videoRef.current) {
+              console.log('警告：videoRef.current为null，无法处理媒体轨道');
+              return;
+            }
+            
+            let currentStream = videoRef.current.srcObject as MediaStream | null;
+            
+            if (publication.track.kind === 'video') {
+              if (currentStream) {
+                const existingVideoTracks = currentStream.getVideoTracks();
+                existingVideoTracks.forEach(existingTrack => {
+                  currentStream!.removeTrack(existingTrack);
+                });
+                currentStream.addTrack(publication.track.mediaStreamTrack);
+              } else {
+                currentStream = new MediaStream([publication.track.mediaStreamTrack]);
+              }
+              
+              videoRef.current.srcObject = currentStream;
+              videoRef.current.autoplay = true;
+              videoRef.current.playsInline = true;
+              videoRef.current.muted = !isPublisher;
+              console.log('本地视频轨道已绑定到主视频元素');
+              
+              if (localVideoRef.current && publication.source !== 'screen_share') {
+                localVideoRef.current.srcObject = new MediaStream([publication.track.mediaStreamTrack]);
+                localVideoRef.current.autoplay = true;
+                localVideoRef.current.playsInline = true;
+                localVideoRef.current.muted = true;
+                console.log('本地视频轨道已绑定到本地预览元素');
+              }
+            }
+            
+            if (publication.track.kind === 'audio') {
+              if (currentStream) {
+                const existingAudioTracks = currentStream.getAudioTracks();
+                existingAudioTracks.forEach(existingTrack => {
+                  currentStream!.removeTrack(existingTrack);
+                });
+                currentStream.addTrack(publication.track.mediaStreamTrack);
+                videoRef.current.srcObject = currentStream;
+                videoRef.current.muted = !isPublisher;
+              } else {
+                currentStream = new MediaStream([publication.track.mediaStreamTrack]);
+                videoRef.current.srcObject = currentStream;
+                videoRef.current.muted = !isPublisher;
+              }
+              console.log('本地音频轨道已绑定到媒体流和视频元素');
+            }
+          }
+        });
+
+        // 处理本地轨道移除
+        room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+          console.log('本地轨道已移除:', publication.trackName, '源:', publication.source);
+          
+          if (!videoRef.current) {
+            console.log('警告：videoRef.current为null，无法处理媒体轨道');
+            return;
+          }
+          
+          const currentStream = videoRef.current.srcObject as MediaStream | null;
+          if (!currentStream) {
+            console.log('当前媒体流为null，无法处理轨道移除');
+            return;
+          }
+          
+          if (publication.kind === Track.Kind.Video) {
+            const videoTracks = currentStream.getVideoTracks();
+            videoTracks.forEach(track => {
+              currentStream!.removeTrack(track);
+              console.log('已从媒体流中移除视频轨道');
+            });
+            
+            if (publication.source !== 'screen_share') {
+              setIsCameraEnabled(false);
+            } else {
+              setIsScreenSharing(false);
+            }
+          } else if (publication.kind === Track.Kind.Audio) {
+            const audioTracks = currentStream.getAudioTracks();
+            audioTracks.forEach(track => {
+              currentStream!.removeTrack(track);
+              console.log('已从媒体流中移除音频轨道');
+            });
+            
+            setIsMicrophoneEnabled(false);
+          }
+          
+          videoRef.current.srcObject = currentStream;
+        });
+
+        // 处理接收到的聊天消息
+        room.on(RoomEvent.DataReceived, (payload, participant, kind) => {
+          console.log('收到数据消息:', payload, '来自:', participant?.identity, '类型:', kind);
+          try {
+            const message = JSON.parse(new TextDecoder().decode(payload));
+            if (message.content && message.from && message.timestamp) {
+              if (message.from !== identity) {
+                setChatMessages(prev => [...prev, message]);
+              }
+            }
+          } catch (err) {
+            console.error('解析聊天消息失败:', err);
+          }
+        });
+
+        // 2. 连接到LiveKit服务器
+        console.log('尝试连接到LiveKit服务器:', LIVEKIT_URL);
+        console.log('使用的token:', token ? '存在' : '不存在', 'token长度:', token?.length);
+        console.log('房间ID:', roomId);
+        console.log('身份:', identity);
+        
+        if (!token) {
+          const errorMsg = 'LiveKit令牌不存在';
+          setError(errorMsg);
+          console.error(errorMsg);
+          return;
         }
         
-        console.log('直播已开始！');
+        const connectOptions: RoomConnectOptions = {
+          autoSubscribe: true,
+        };
+        
+        console.log('开始调用room.connect()...');
+        await room.connect(LIVEKIT_URL, token, connectOptions);
+        console.log('LiveKit连接成功!');
+        
+        // 3. 设置为直播状态
+        setIsPublishing(true);
+        
+        console.log('直播已开始！默认所有设备关闭');
       }
     } catch (err) {
       console.error('开播/停止直播失败:', err);
@@ -1141,11 +1076,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       {/* 调试信息 - 隐藏 */}
       <div style={{ display: 'none' }}>
         <div>身份: {identity}</div>
-        <div>是否主播: {isPublisher ? '是' : '否'}</div>
-        <div>是否直播中: {isPublishing ? '是' : '否'}</div>
-        <div>Metadata: {metadata ? JSON.stringify(metadata) : '无'}</div>
-        <div>LiveKit URL: {LIVEKIT_URL}</div>
-        <div>Token状态: {token ? '存在' : '不存在'}</div>
       </div>
     </div>
   );
