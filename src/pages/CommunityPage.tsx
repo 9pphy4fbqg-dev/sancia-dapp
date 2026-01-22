@@ -89,10 +89,15 @@ const CommunityPage = () => {
   
   // 生成LiveKit令牌
   const generateToken = useCallback(async (roomId: string, isPublisher: boolean) => {
-    if (!address) {
-      setTokenError('请先连接钱包');
-      return;
-    }
+    // 暂时注释掉地址检查，允许未登录用户生成观众令牌
+    // if (!address) {
+    //   setTokenError('请先连接钱包');
+    //   return;
+    // }
+    
+    // 使用默认地址或生成临时地址作为identity
+    const identity = address || `viewer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const isActualPublisher = isPublisher && !!address; // 只有有地址的用户才能成为发布者
     
     setIsGeneratingToken(true);
     setTokenError(null);
@@ -100,13 +105,13 @@ const CommunityPage = () => {
     try {
       const tokenResponse = await getToken({
         room: roomId,
-        identity: address,
-        isPublisher,
-        metadata: { address }
+        identity,
+        isPublisher: isActualPublisher,
+        metadata: { address: identity }
       });
       
       setLiveKitToken(tokenResponse.token);
-      console.log('LiveKit令牌生成成功:', { roomId, isPublisher });
+      console.log('LiveKit令牌生成成功:', { roomId, isPublisher: isActualPublisher, identity });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '生成LiveKit令牌失败';
       setTokenError(errorMessage);
@@ -116,14 +121,9 @@ const CommunityPage = () => {
     }
   }, [address, getToken]);
   
-  // 当选择的房间、钱包地址或getToken变化时，生成新的令牌
+  // 当选择的房间或getToken变化时，生成新的令牌
   useEffect(() => {
-    // 确保address和getToken都已准备好
-    if (!address) {
-      console.log('等待钱包连接...');
-      return;
-    }
-    
+    // 确保getToken已准备好
     if (!getToken) {
       console.log('等待getToken函数初始化...');
       return;
@@ -151,7 +151,7 @@ const CommunityPage = () => {
       console.log('生成官方直播间令牌，isOfficialPublisher:', isOfficialPublisher);
       generateToken(OFFICIAL_ROOM_ID, isOfficialPublisher);
     }
-  }, [selectedRoom, address, generateToken, getToken]);
+  }, [selectedRoom, generateToken, getToken]);
 
   // 加载房间列表
   useEffect(() => {
@@ -237,7 +237,7 @@ const CommunityPage = () => {
           token={liveKitToken}
           isPublisher={OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '')}
           metadata={{ address }}
-          onLiveStatusChange={(isLive) => {
+          onLiveStatusChange={useCallback((isLive: boolean) => {
             console.log('官方直播间直播状态变化:', isLive);
             setOfficialRoomLiveStatus(isLive);
             
@@ -253,7 +253,7 @@ const CommunityPage = () => {
               }
               return updatedRooms;
             });
-          }}
+          }, [])}
         />
       </div>
 
