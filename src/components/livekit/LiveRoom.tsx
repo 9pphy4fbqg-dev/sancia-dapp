@@ -403,14 +403,16 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       const newFacing = currentCameraFacing === 'user' ? 'environment' : 'user';
       setCurrentCameraFacing(newFacing);
       
-      // 如果摄像头已经开启，重新获取媒体流并指定正确的摄像头方向
+      // 如果摄像头已经开启，获取当前摄像头轨道并重启它，指定新的摄像头方向
       if (isCameraEnabled && roomRef.current) {
-        // 先禁用摄像头
-        await roomRef.current.localParticipant.setCameraEnabled(false);
-        // 然后重新启用摄像头，并指定摄像头方向
-        await roomRef.current.localParticipant.setCameraEnabled(true, {
-          facingMode: newFacing
-        });
+        // 获取摄像头轨道出版物
+        const cameraPublication = roomRef.current.localParticipant.getTrackPublication(Track.Source.Camera);
+        if (cameraPublication?.track) {
+          // 重启轨道并指定新的摄像头方向
+          await (cameraPublication.track as any).restartTrack({
+            facingMode: newFacing
+          });
+        }
       }
     } catch (err) {
       console.error('切换前后摄像头失败:', err);
@@ -450,6 +452,14 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
 
     try {
       const newState = !isScreenSharing;
+      
+      // 检查是否为移动设备，屏幕分享在某些移动端浏览器上可能不支持或有限制
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // 如果是移动端且要开启屏幕分享，给出提示
+      if (isMobile && newState) {
+        console.warn('移动端屏幕分享可能不支持或有限制');
+      }
       
       // 更新本地状态
       setIsScreenSharing(newState);
