@@ -27,8 +27,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [showLocalPreview, setShowLocalPreview] = useState(isPublisher);
   const [currentCameraFacing, setCurrentCameraFacing] = useState<'user' | 'environment'>('user'); // 当前摄像头朝向
   const [microphoneVolume, setMicrophoneVolume] = useState(0); // 麦克风音量，0-100
-  const [audioActivated, setAudioActivated] = useState(false); // 音频是否已激活
-  const [showAudioPrompt, setShowAudioPrompt] = useState(false); // 是否显示音频提示
+  const [showAudioPermission, setShowAudioPermission] = useState(false); // 音频授权弹窗显示状态
   // 聊天组件直接开启，不需要隐藏功能，移除相关状态
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -563,10 +562,10 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
 
   }, [isPublisher, isPublishing, isMicrophoneEnabled]);
 
-  // 音频激活函数
-  const activateAudio = async () => {
+  // 音频授权函数
+  const handleAudioPermission = async () => {
     try {
-      // 创建音频上下文并激活
+      // 激活音频上下文
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
@@ -577,39 +576,13 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         videoRef.current.muted = false;
       }
       
-      // 更新状态
-      setAudioActivated(true);
-      setShowAudioPrompt(false);
-      console.log('🔊 音频已激活');
+      // 隐藏授权弹窗
+      setShowAudioPermission(false);
+      console.log('🔊 音频授权已通过');
     } catch (error) {
-      console.error('激活音频失败:', error);
+      console.error('音频授权失败:', error);
     }
   };
-
-  // 音频检测和提示
-  useEffect(() => {
-    if (!isPublisher) {
-      // 检测音频是否能自动播放
-      const testAudio = async () => {
-        try {
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          
-          // 尝试自动激活音频上下文
-          if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-            setAudioActivated(true);
-            console.log('🔊 音频可自动播放');
-          }
-        } catch (error) {
-          // 自动激活失败，需要用户交互
-          setShowAudioPrompt(true);
-          console.log('🔊 需要用户交互激活音频');
-        }
-      };
-      
-      testAudio();
-    }
-  }, [isPublisher]);
 
   // 当直播状态变化时，通知父组件
   useEffect(() => {
@@ -784,47 +757,42 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           </span>
         </div>
         
-        {/* 音频激活提示 - 仅观众端显示 */}
-        {!isPublisher && showAudioPrompt && !audioActivated && (
+        {/* 音频授权弹窗 - 仅观众端显示 */}
+        {!isPublisher && (
           <div style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            border: '1px solid #fff',
+            borderRadius: '8px',
+            padding: '12px 20px',
             color: '#fff',
-            fontSize: '16px',
+            fontSize: '14px',
             zIndex: 20,
-            cursor: 'pointer',
-            padding: '20px'
-          }} onClick={activateAudio}>
-            <div style={{ marginBottom: '16px', fontSize: '32px' }}>🔊</div>
-            <div style={{ marginBottom: '8px', textAlign: 'center' }}>请点击激活音频</div>
-            <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '20px', textAlign: 'center' }}>
-              钱包浏览器需要您的授权才能播放音频
-            </div>
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            maxWidth: '80%',
+            textAlign: 'center'
+          }}>
+            <span>🔊</span>
+            <span>请点击授权播放音频</span>
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                activateAudio();
-              }}
+              onClick={handleAudioPermission}
               style={{
-                padding: '12px 24px',
                 backgroundColor: '#1890ff',
                 color: '#fff',
                 border: 'none',
-                borderRadius: '8px',
-                fontSize: '16px',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                fontSize: '12px',
                 cursor: 'pointer',
                 fontWeight: 'bold'
               }}
             >
-              点击听声音
+              允许
             </button>
           </div>
         )}
