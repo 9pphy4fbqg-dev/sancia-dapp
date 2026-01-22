@@ -275,8 +275,49 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           console.log('本地音频轨道已绑定到媒体流和视频元素');
         }
       }
+    });
+
+    // 处理本地轨道移除
+    room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+      console.log('本地轨道已移除:', publication.trackName, '源:', publication.source);
       
-      setIsPublishing(true);
+      if (!videoRef.current) {
+        console.log('警告：videoRef.current为null，无法处理媒体轨道');
+        return;
+      }
+      
+      const currentStream = videoRef.current.srcObject as MediaStream | null;
+      if (!currentStream) {
+        console.log('当前媒体流为null，无法处理轨道移除');
+        return;
+      }
+      
+      if (publication.kind === Track.Kind.Video) {
+        const videoTracks = currentStream.getVideoTracks();
+        videoTracks.forEach(track => {
+          currentStream!.removeTrack(track);
+          console.log('已从媒体流中移除视频轨道');
+        });
+        
+        // 更新本地状态
+        if (publication.source !== 'screen_share') {
+          setIsCameraEnabled(false);
+        } else {
+          setIsScreenSharing(false);
+        }
+      } else if (publication.kind === Track.Kind.Audio) {
+        const audioTracks = currentStream.getAudioTracks();
+        audioTracks.forEach(track => {
+          currentStream!.removeTrack(track);
+          console.log('已从媒体流中移除音频轨道');
+        });
+        
+        // 更新本地状态
+        setIsMicrophoneEnabled(false);
+      }
+      
+      // 确保视频元素仍有srcObject
+      videoRef.current.srcObject = currentStream;
     });
 
     // 处理接收到的聊天消息
@@ -370,79 +411,75 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       console.log('当前连接状态:', connectionState);
 
       if (isPublishing) {
-        // 停止发布
-        console.log('停止发布流...');
+        // 停止发布并彻底断开服务器连接
+        console.log('停止发布直播流并断开服务器连接...');
         
-        // 使用Promise.allSettled确保即使某些操作失败，其他操作仍能继续执行
+        // 1. 停止所有媒体轨道的发布
         await Promise.allSettled([
-          // 停止所有媒体轨道
           roomRef.current.localParticipant.setCameraEnabled(false),
           roomRef.current.localParticipant.setMicrophoneEnabled(false),
           roomRef.current.localParticipant.setScreenShareEnabled(false)
         ]);
         
-        // 立即更新状态
+        // 2. 断开与LiveKit服务器的连接
+        console.log('断开LiveKit服务器连接...');
+        roomRef.current.disconnect();
+        roomRef.current = null;
+        
+        // 3. 更新所有状态
         setIsPublishing(false);
         setIsCameraEnabled(false);
         setIsMicrophoneEnabled(false);
         setIsScreenSharing(false);
         
-        console.log('已停止发布流，所有媒体轨道已关闭');
+        console.log('已停止发布流并断开服务器连接，所有直播状态已结束');
       } else {
-        // 开始发布 - 让LiveKit内部处理媒体流和权限
-        console.log('开始发布流...');
+        // 开始发布直播流
+        console.log('开始发布直播流...');
+        
         let hasPublished = false;
         
-        // 如果没有启用任何设备，默认启用摄像头和麦克风
-        const shouldEnableCamera = !isCameraEnabled && !isMicrophoneEnabled && !isScreenSharing;
-        if (shouldEnableCamera) {
-          console.log('没有启用任何设备，默认启用摄像头和麦克风...');
-          setIsCameraEnabled(true);
-          setIsMicrophoneEnabled(true);
-        }
-        
-        // 优先处理屏幕分享
-        if (isScreenSharing) {
-          console.log('开启屏幕分享... (使用LiveKit内置处理)');
-          await roomRef.current.localParticipant.setScreenShareEnabled(true);
-          console.log('屏幕分享开启成功');
-          hasPublished = true;
-        } else if (isCameraEnabled || shouldEnableCamera) {
-          // 如果没有开启屏幕分享，才处理摄像头
-          console.log('开启摄像头... (使用LiveKit内置处理)');
+        // 根据当前设备状态发布相应轨道
+        if (isCameraEnabled) {
+          console.log('发布摄像头轨道...');
           await roomRef.current.localParticipant.setCameraEnabled(true);
-          console.log('摄像头开启成功');
           hasPublished = true;
         }
         
-        // 处理麦克风
-        if (isMicrophoneEnabled || shouldEnableCamera) {
-          console.log('开启麦克风... (使用LiveKit内置处理)');
+        if (isMicrophoneEnabled) {
+          console.log('发布麦克风轨道...');
           await roomRef.current.localParticipant.setMicrophoneEnabled(true);
-          console.log('麦克风开启成功');
           hasPublished = true;
         }
         
-        if (hasPublished) {
-          setIsPublishing(true);
-          console.log('直播已开始！');
-        } else {
-          console.error('无法开播：没有成功开启任何设备');
-          setError('无法开启设备，请检查权限设置');
+        if (isScreenSharing) {
+          console.log('发布屏幕分享轨道...');
+          await roomRef.current.localParticipant.setScreenShareEnabled(true);
+          hasPublished = true;
         }
+        
+        // 如果没有启用任何设备，提示用户
+        if (!hasPublished) {
+          console.error('无法开播：请先开启至少一个设备（摄像头、麦克风或屏幕分享）');
+          setError('请先开启至少一个设备（摄像头、麦克风或屏幕分享）');
+          return;
+        }
+        
+        // 更新发布状态
+        setIsPublishing(true);
+        console.log('直播已开始！');
       }
     } catch (err) {
       console.error('开播/停止直播失败:', err);
       console.error('错误详情:', (err as Error).stack);
       setError('操作失败: ' + (err as Error).message);
       
-      // 即使出错，也确保状态正确
+      // 即使出错，也确保发布状态正确
       if (isPublishing) {
+        // 如果是停止直播出错，确保发布状态为false
         setIsPublishing(false);
-        setIsCameraEnabled(false);
-        setIsMicrophoneEnabled(false);
-        setIsScreenSharing(false);
       }
+      // 开播失败时，不重置设备状态，保持用户的设备偏好
     }
   };
 
@@ -470,18 +507,21 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       // 先更新本地状态
       setIsCameraEnabled(newState);
       
-      if (newState && !isPublishing) {
-        console.log('摄像头已开启，自动开播...');
-        // 直接调用开播逻辑，确保状态一致
-        await togglePublishing();
-      } else if (isPublishing) {
-        // 只有在已经开播的情况下，才实际控制摄像头
+      if (isPublishing) {
+        // 已经开播，直接更新摄像头状态
         console.log('更新摄像头状态到:', newState);
         await roomRef.current.localParticipant.setCameraEnabled(newState);
+        console.log('摄像头状态更新成功');
+      } else if (newState) {
+        // 未开播且开启摄像头，自动开播
+        console.log('摄像头已开启，自动开播...');
+        await togglePublishing();
       }
     } catch (err) {
       console.error('切换摄像头失败:', err);
       setError('操作失败: ' + (err as Error).message);
+      // 恢复状态 - 使用当前状态的反值，而不是newState（因为newState只在try块内有效）
+      setIsCameraEnabled(!isCameraEnabled);
     }
   };
 
@@ -529,21 +569,24 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       const newState = !isMicrophoneEnabled;
       console.log('切换麦克风状态，新状态:', newState);
       
-      // 更新本地状态
+      // 先更新本地状态
       setIsMicrophoneEnabled(newState);
       
-      if (newState && !isPublishing) {
-        console.log('麦克风已开启，自动开播...');
-        // 直接调用开播逻辑，确保状态一致
-        await togglePublishing();
-      } else if (isPublishing) {
-        // 只有在已经开播的情况下，才实际控制麦克风
+      if (isPublishing) {
+        // 已经开播，直接更新麦克风状态
         console.log('更新麦克风状态到:', newState);
         await roomRef.current.localParticipant.setMicrophoneEnabled(newState);
+        console.log('麦克风状态更新成功');
+      } else if (newState) {
+        // 未开播且开启麦克风，自动开播
+        console.log('麦克风已开启，自动开播...');
+        await togglePublishing();
       }
     } catch (err) {
       console.error('切换麦克风失败:', err);
       setError('操作失败: ' + (err as Error).message);
+      // 恢复状态 - 使用当前状态的反值，而不是newState（因为newState只在try块内有效）
+      setIsMicrophoneEnabled(!isMicrophoneEnabled);
     }
   };
 
@@ -574,22 +617,22 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       // 先更新本地状态
       setIsScreenSharing(newState);
       
-      if (newState && !isPublishing) {
-        console.log('屏幕分享已开启，自动开播...');
-        // 直接调用开播逻辑，确保状态一致
-        await togglePublishing();
-      } else if (isPublishing) {
-        // 只有在已经开播的情况下，才实际控制屏幕分享
+      if (isPublishing) {
+        // 已经开播，直接更新屏幕分享状态
         console.log('更新屏幕分享状态到:', newState);
         await roomRef.current.localParticipant.setScreenShareEnabled(newState);
-        console.log('屏幕分享', newState ? '开启' : '关闭', '成功');
+        console.log('屏幕分享状态更新成功');
+      } else if (newState) {
+        // 未开播且开启屏幕分享，自动开播
+        console.log('屏幕分享已开启，自动开播...');
+        await togglePublishing();
       }
     } catch (err) {
       console.error('切换屏幕分享失败:', err);
       console.error('错误详情:', (err as Error).stack);
       setError('操作失败: ' + (err as Error).message);
       // 恢复状态
-      if (newState && !isPublishing) {
+      if (isPublishing) {
         setIsPublishing(false);
       }
       setIsScreenSharing(!newState);
@@ -616,28 +659,23 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       timestamp: Date.now()
     };
     
-    // 先发送消息到服务器，避免UI更新导致的渲染问题
-    if (roomRef.current) {
-      try {
-        // 使用LiveKit数据通道发送消息
-        roomRef.current.localParticipant.publishData(
-          new TextEncoder().encode(JSON.stringify(newMessage)),
-          {
-            topic: 'chat',
-            reliable: true
-          }
-        );
-        console.log('消息已发送到服务器:', newMessage);
-      } catch (error) {
-        console.error('发送消息到服务器失败:', error);
-      }
-    }
-    
-    // 再更新本地UI，避免阻塞发送逻辑
     setChatMessages(prev => [...prev, newMessage]);
     setInputMessage('');
     
-    console.log('已添加本地聊天消息:', newMessage);
+    // 这里可以添加发送到服务器的逻辑
+    console.log('发送消息:', newMessage);
+    
+    // TODO: 集成LiveKit数据通道发送消息
+    if (roomRef.current) {
+      // 使用LiveKit数据通道发送消息
+      roomRef.current.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(newMessage)),
+        {
+          topic: 'chat',
+          reliable: true
+        }
+      );
+    }
   };
 
   // 处理输入框变化
@@ -880,7 +918,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     fontWeight: 'bold',
                     border: '1px solid rgba(255, 255, 255, 0.2)'
                   }}>
-                    {msg.from.charAt(msg.from.length - 1).toUpperCase()}
+                    {msg.from.charAt(0).toUpperCase()}
                   </div>
                   
                   {/* 消息内容 - 地址和内容在同一行 */}
@@ -942,25 +980,24 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 autoCorrect="on"
                 style={{
                   flex: 1,
-                  height: '32px', /* 增加高度，确保16px字体有足够空间 */
-                  padding: '6px 8px', /* 增加内边距，提高用户体验 */
+                  height: '20px',
+                  padding: '0 6px',
                   backgroundColor: 'rgba(0, 0, 0, 0.3)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '4px',
                   color: '#fff',
-                  fontSize: '16px', /* 保持16px，避免移动端自动放大 */
-                  minHeight: '32px', /* 确保最小高度 */
-                  lineHeight: '16px', /* 调整行高 */
+                  fontSize: '16px', /* 增加到16px，避免移动端自动放大 */
                   outline: 'none',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  lineHeight: '20px'
                 }}
               />
             <button
               onClick={sendMessage}
               disabled={inputMessage.trim() === ''}
               style={{
-                width: '32px', /* 与输入框高度匹配 */
-                height: '32px', /* 与输入框高度匹配 */
+                width: '20px',
+                height: '20px',
                 backgroundColor: inputMessage.trim() === '' ? 'rgba(255, 255, 255, 0.2)' : '#1890ff',
                 color: '#fff',
                 border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -969,13 +1006,11 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '16px', /* 增大字体大小 */
+                fontSize: '10px',
                 padding: '0',
                 outline: 'none',
                 boxShadow: 'none',
-                boxSizing: 'border-box',
-                minWidth: '32px', /* 确保最小宽度 */
-                minHeight: '32px' /* 确保最小高度 */
+                boxSizing: 'border-box'
               }}
             >
               →
