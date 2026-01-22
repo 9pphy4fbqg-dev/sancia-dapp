@@ -103,7 +103,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           videoRef.current.srcObject = currentStream;
           videoRef.current.autoplay = true;
           videoRef.current.playsInline = true;
-          videoRef.current.muted = !isPublisher;
+          // 只有主播端静音，观众端不静音
+          videoRef.current.muted = false;
         } catch (error) {
           console.error('处理远程轨道时出错:', error);
         }
@@ -231,7 +232,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             videoRef.current.srcObject = currentStream;
             videoRef.current.autoplay = true;
             videoRef.current.playsInline = true;
-            videoRef.current.muted = !isPublisher;
+            // 只有主播端静音自己（避免回声），观众端不静音
+            videoRef.current.muted = isPublisher;
           } catch (error) {
             console.error('处理远程轨道时出错:', error);
           }
@@ -268,7 +270,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               // 添加摄像头轨道
               currentStream.addTrack(publication.track.mediaStreamTrack);
               videoRef.current.srcObject = currentStream;
-              videoRef.current.muted = !isPublisher;
+              // 只有主播端静音自己（避免回声），观众端不静音
+              videoRef.current.muted = isPublisher;
             }
           } else if (publication.source === 'screen_share') {
             setIsScreenSharing(true);
@@ -289,7 +292,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               // 添加屏幕共享轨道
               currentStream.addTrack(publication.track.mediaStreamTrack);
               videoRef.current.srcObject = currentStream;
-              videoRef.current.muted = !isPublisher;
+              // 只有主播端静音自己（避免回声），观众端不静音
+              videoRef.current.muted = isPublisher;
             }
           } else if (publication.source === 'microphone') {
             setIsMicrophoneEnabled(true);
@@ -310,7 +314,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               // 添加音频轨道
               currentStream.addTrack(publication.track.mediaStreamTrack);
               videoRef.current.srcObject = currentStream;
-              videoRef.current.muted = !isPublisher;
+              // 只有主播端静音自己（避免回声），观众端不静音
+              videoRef.current.muted = isPublisher;
             }
           }
         });
