@@ -156,60 +156,125 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         });
 
         // 处理远程轨道订阅
-        room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
-          console.log('已订阅远程轨道:', track.kind, 'from', participant.identity);
-          
-          if (!videoRef.current) {
-            console.log('警告：videoRef.current为null，无法处理媒体轨道');
-            return;
-          }
-          
-          let currentStream = videoRef.current.srcObject as MediaStream | null;
-          
-          try {
-            if (track.kind === 'video') {
-              if (!currentStream) {
-                currentStream = new MediaStream();
-              }
-              
-              const existingVideoTracks = currentStream.getVideoTracks();
-              existingVideoTracks.forEach(existingTrack => {
-                currentStream!.removeTrack(existingTrack);
-              });
-              currentStream.addTrack(track.mediaStreamTrack);
-              
-              if (videoRef.current.srcObject !== currentStream) {
-                videoRef.current.srcObject = currentStream;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                videoRef.current.muted = false;
-              }
-              console.log('远程视频轨道已成功绑定到视频元素');
+      room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
+        console.log('=== 观众端收到TrackSubscribed事件 ===');
+        console.log('已订阅远程轨道:', track.kind, 'from', participant.identity);
+        console.log('轨道信息:', {
+          kind: track.kind,
+          isMuted: track.isMuted,
+          source: publication.source
+        });
+        
+        if (!videoRef.current) {
+          console.log('警告：videoRef.current为null，无法处理媒体轨道');
+          return;
+        }
+        
+        let currentStream = videoRef.current.srcObject as MediaStream | null;
+        console.log('当前视频流:', currentStream ? '存在' : '不存在');
+        
+        try {
+          if (track.kind === 'video') {
+            console.log('处理视频轨道...');
+            if (!currentStream) {
+              currentStream = new MediaStream();
+              console.log('创建新的媒体流');
             }
             
-            if (track.kind === 'audio') {
-              if (!currentStream) {
-                currentStream = new MediaStream();
-              }
-              
-              const existingAudioTracks = currentStream.getAudioTracks();
-              existingAudioTracks.forEach(existingTrack => {
-                currentStream!.removeTrack(existingTrack);
+            // 替换现有视频轨道
+            const existingVideoTracks = currentStream.getVideoTracks();
+            console.log('现有视频轨道数量:', existingVideoTracks.length);
+            existingVideoTracks.forEach(existingTrack => {
+              currentStream!.removeTrack(existingTrack);
+              console.log('移除现有视频轨道:', existingTrack.id);
+            });
+            
+            // 添加新视频轨道
+            currentStream.addTrack(track.mediaStreamTrack);
+            console.log('添加新视频轨道');
+            
+            // 更新视频元素
+            if (videoRef.current.srcObject !== currentStream) {
+              console.log('更新视频元素的srcObject');
+              videoRef.current.srcObject = currentStream;
+              videoRef.current.autoplay = true;
+              videoRef.current.playsInline = true;
+              videoRef.current.muted = !isPublisher; // 观众端需要听到声音
+              console.log('视频元素配置:', {
+                autoplay: videoRef.current.autoplay,
+                playsInline: videoRef.current.playsInline,
+                muted: videoRef.current.muted
               });
-              currentStream.addTrack(track.mediaStreamTrack);
-              
-              if (videoRef.current.srcObject !== currentStream) {
-                videoRef.current.srcObject = currentStream;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                videoRef.current.muted = false;
-              }
-              console.log('远程音频轨道已成功绑定到媒体流');
             }
-          } catch (error) {
-            console.error('处理远程轨道时出错:', error);
+            console.log('远程视频轨道已成功绑定到视频元素');
           }
+          
+          if (track.kind === 'audio') {
+            console.log('处理音频轨道...');
+            if (!currentStream) {
+              currentStream = new MediaStream();
+              console.log('创建新的媒体流');
+            }
+            
+            // 替换现有音频轨道
+            const existingAudioTracks = currentStream.getAudioTracks();
+            console.log('现有音频轨道数量:', existingAudioTracks.length);
+            existingAudioTracks.forEach(existingTrack => {
+              currentStream!.removeTrack(existingTrack);
+              console.log('移除现有音频轨道:', existingTrack.id);
+            });
+            
+            // 添加新音频轨道
+            currentStream.addTrack(track.mediaStreamTrack);
+            console.log('添加新音频轨道');
+            
+            // 更新视频元素
+            if (videoRef.current.srcObject !== currentStream) {
+              console.log('更新视频元素的srcObject');
+              videoRef.current.srcObject = currentStream;
+              videoRef.current.autoplay = true;
+              videoRef.current.playsInline = true;
+              videoRef.current.muted = !isPublisher; // 观众端需要听到声音
+              console.log('视频元素配置:', {
+                autoplay: videoRef.current.autoplay,
+                playsInline: videoRef.current.playsInline,
+                muted: videoRef.current.muted
+              });
+            }
+            console.log('远程音频轨道已成功绑定到媒体流');
+          }
+        } catch (error) {
+          console.error('处理远程轨道时出错:', error);
+          console.error('错误详情:', (error as Error).stack);
+        }
+      });
+
+      // 处理有新的媒体轨道发布
+      room.on(RoomEvent.TrackPublished, (publication, participant) => {
+        console.log('=== 观众端收到TrackPublished事件 ===');
+        console.log('有新的媒体轨道发布:', publication.kind, 'from', participant.identity);
+        console.log('轨道信息:', {
+          kind: publication.kind,
+          source: publication.source,
+          isSubscribed: publication.isSubscribed
         });
+      });
+
+      // 处理有新的参与者加入
+      room.on(RoomEvent.ParticipantConnected, (participant) => {
+        console.log('=== 观众端收到ParticipantConnected事件 ===');
+        console.log('有新的参与者加入:', participant.identity);
+      });
+
+      // 处理参与者的媒体轨道
+      room.on(RoomEvent.TrackPublished, (publication: any, participant: any) => {
+        console.log('=== 观众端收到TrackPublished事件 ===');
+        console.log('参与者发布了新的媒体轨道:', publication.kind, 'from', participant.identity);
+        console.log('轨道信息:', {
+          kind: publication.kind,
+          source: publication.source
+        });
+      });
 
         // 处理本地轨道发布
         room.on(RoomEvent.LocalTrackPublished, (publication) => {
@@ -649,6 +714,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         )}
         
         {/* 覆盖层，确保用户能看到组件 */}
+        {/* 只有当连接状态为Disconnected且没有错误时才显示覆盖层 */}
+        {/* 对于观众端，连接成功后应该隐藏覆盖层 */}
         {connectionState === ConnectionState.Disconnected && !error && (
           <div style={{
             position: 'absolute',
@@ -665,12 +732,30 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             zIndex: 5
           }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ marginBottom: '8px' }}>直播组件已加载</div>
+              <div style={{ marginBottom: '8px' }}>{isPublisher ? '直播组件已加载，等待用户点击开播按钮' : '正在连接到直播间...'}</div>
               <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '4px' }}>房间ID: {roomId}</div>
               <div style={{ fontSize: '14px', color: '#aaa' }}>LiveKit URL: {LIVEKIT_URL}</div>
+              <div style={{ fontSize: '14px', color: '#aaa', marginTop: '8px' }}>连接状态: {connectionState}</div>
             </div>
           </div>
         )}
+        
+        {/* 显示连接状态指示器 */}
+        <div style={{
+          position: 'absolute',
+          bottom: '10px',
+          left: '10px',
+          padding: '4px 8px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: connectionState === ConnectionState.Connected ? '#52c41a' : '#ff4d4f',
+          fontSize: '12px',
+          borderRadius: '4px',
+          zIndex: 10
+        }}>
+          {connectionState === ConnectionState.Connected ? '已连接' : 
+           connectionState === ConnectionState.Connecting ? '连接中' : 
+           connectionState === ConnectionState.Reconnecting ? '重新连接中' : '已断开'}
+        </div>
         
         {/* 错误信息 */}
         {error && (
