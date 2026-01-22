@@ -259,11 +259,19 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               currentStream!.removeTrack(existingTrack);
             });
             currentStream.addTrack(publication.track.mediaStreamTrack);
+            
+            // 更新视频元素的srcObject，确保音频能被听到
+            videoRef.current.srcObject = currentStream;
+            videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
           } else {
             // 创建新流
             currentStream = new MediaStream([publication.track.mediaStreamTrack]);
+            
+            // 设置视频元素的srcObject
+            videoRef.current.srcObject = currentStream;
+            videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
           }
-          console.log('本地音频轨道已绑定到媒体流');
+          console.log('本地音频轨道已绑定到媒体流和视频元素');
         }
       }
       
@@ -384,11 +392,12 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         console.log('开始发布流...');
         let hasPublished = false;
         
-        // 如果没有启用任何设备，默认启用摄像头
+        // 如果没有启用任何设备，默认启用摄像头和麦克风
         const shouldEnableCamera = !isCameraEnabled && !isMicrophoneEnabled && !isScreenSharing;
         if (shouldEnableCamera) {
-          console.log('没有启用任何设备，默认启用摄像头...');
+          console.log('没有启用任何设备，默认启用摄像头和麦克风...');
           setIsCameraEnabled(true);
+          setIsMicrophoneEnabled(true);
         }
         
         // 优先处理屏幕分享
@@ -406,7 +415,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         }
         
         // 处理麦克风
-        if (isMicrophoneEnabled) {
+        if (isMicrophoneEnabled || shouldEnableCamera) {
           console.log('开启麦克风... (使用LiveKit内置处理)');
           await roomRef.current.localParticipant.setMicrophoneEnabled(true);
           console.log('麦克风开启成功');
@@ -818,7 +827,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       {/* 底部控制区域 - 包含聊天和主播控制 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '2px' }}>
         {/* 聊天面板 - 放在左侧，与主播控制按钮底部齐平 */}
-        <div style={{ flex: 1, marginRight: '10px', display: 'flex', flexDirection: 'column', backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '4px', height: '160px' }}>
+        <div style={{ flex: 1, marginRight: '10px', display: 'flex', flexDirection: 'column', backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '4px', height: '249px' }}>
           {/* 聊天内容 - 固定高度，滚动显示，最新消息在底部 */}
           <div 
             ref={chatContentRef}
@@ -863,7 +872,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     fontWeight: 'bold',
                     border: '1px solid rgba(255, 255, 255, 0.2)'
                   }}>
-                    {msg.from.charAt(0).toUpperCase()}
+                    {msg.from.charAt(msg.from.length - 1).toUpperCase()}
                   </div>
                   
                   {/* 消息内容 - 地址和内容在同一行 */}
@@ -925,24 +934,25 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 autoCorrect="on"
                 style={{
                   flex: 1,
-                  height: '20px',
-                  padding: '0 6px',
+                  height: '32px', /* 增加高度，确保16px字体有足够空间 */
+                  padding: '6px 8px', /* 增加内边距，提高用户体验 */
                   backgroundColor: 'rgba(0, 0, 0, 0.3)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '4px',
                   color: '#fff',
-                  fontSize: '16px', /* 增加到16px，避免移动端自动放大 */
+                  fontSize: '16px', /* 保持16px，避免移动端自动放大 */
+                  minHeight: '32px', /* 确保最小高度 */
+                  lineHeight: '16px', /* 调整行高 */
                   outline: 'none',
-                  boxSizing: 'border-box',
-                  lineHeight: '20px'
+                  boxSizing: 'border-box'
                 }}
               />
             <button
               onClick={sendMessage}
               disabled={inputMessage.trim() === ''}
               style={{
-                width: '20px',
-                height: '20px',
+                width: '32px', /* 与输入框高度匹配 */
+                height: '32px', /* 与输入框高度匹配 */
                 backgroundColor: inputMessage.trim() === '' ? 'rgba(255, 255, 255, 0.2)' : '#1890ff',
                 color: '#fff',
                 border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -951,11 +961,13 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '10px',
+                fontSize: '16px', /* 增大字体大小 */
                 padding: '0',
                 outline: 'none',
                 boxShadow: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                minWidth: '32px', /* 确保最小宽度 */
+                minHeight: '32px' /* 确保最小高度 */
               }}
             >
               →
