@@ -25,8 +25,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [showLocalPreview, setShowLocalPreview] = useState(isPublisher);
   const [currentCameraFacing, setCurrentCameraFacing] = useState<'user' | 'environment'>('user'); // 当前摄像头朝向
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const MAX_RECONNECT_ATTEMPTS = 5;
   // 聊天组件直接开启，不需要隐藏功能，移除相关状态
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -107,33 +105,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       } else if (state === ConnectionState.Disconnected) {
         console.log('LiveKit连接断开！');
         console.log('当前roomRef.current:', !!roomRef.current);
-        console.log('当前重连尝试次数:', reconnectAttempts);
-        console.log('最大重连尝试次数:', MAX_RECONNECT_ATTEMPTS);
-        console.log('token是否有效:', token ? '存在' : '不存在');
-        
-        // 只在token有效且重连尝试次数未超过限制时尝试重连
-        if (token && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          // 延迟重连，避免立即重试
-          setTimeout(() => {
-            if (roomRef.current) {
-              console.log(`第${reconnectAttempts + 1}次尝试重新连接到LiveKit服务器...`);
-              console.log('重新连接使用的token:', token ? '存在' : '不存在');
-              console.log('重新连接使用的LIVEKIT_URL:', LIVEKIT_URL);
-              
-              // 更新重连尝试次数
-              setReconnectAttempts(prev => prev + 1);
-              
-              // 尝试重新连接
-              roomRef.current.connect(LIVEKIT_URL, token);
-            }
-          }, 2000); // 2秒后尝试重连
-        } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-          console.log('已达到最大重连尝试次数，停止重连');
-          setError('连接断开，已达到最大重连尝试次数，请刷新页面重试');
-        } else {
-          console.log('token无效，无法重连');
-          setError('连接断开，token无效，请刷新页面重试');
-        }
+        // 移除手动重连逻辑，让LiveKit内部处理重连
+        // 手动重连可能导致与useEffect依赖项冲突，造成循环重连
       } else if (state === ConnectionState.Reconnecting) {
         console.log('LiveKit正在重新连接...');
       }
@@ -144,8 +117,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       console.log('=== 收到RoomEvent.Connected事件 ===');
       console.log('LiveKit连接成功!');
       setError(null);
-      // 重置重连尝试次数
-      setReconnectAttempts(0);
     });
 
     // 处理连接失败
@@ -154,21 +125,69 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       console.log('LiveKit连接断开!');
     });
 
-    // 处理远程视频轨道
+    // 处理远程轨道订阅
     room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
       console.log('已订阅远程轨道:', track.kind, 'from', participant.identity);
-      if (track.kind === 'video' && videoRef.current) {
-        videoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
-        videoRef.current.autoplay = true;
-        videoRef.current.playsInline = true;
-        console.log('远程视频轨道已绑定到视频元素');
+      
+      // 确保videoRef.current存在
+      if (!videoRef.current) {
+        console.log('警告：videoRef.current为null，无法处理媒体轨道');
+        return;
       }
-      // 处理屏幕分享轨道
-      if (track.kind === 'video' && publication.source === 'screen_share' && videoRef.current) {
-        videoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
-        videoRef.current.autoplay = true;
-        videoRef.current.playsInline = true;
-        console.log('远程屏幕分享轨道已绑定到视频元素');
+      
+      // 获取当前视频流或创建新流
+      let currentStream = videoRef.current.srcObject as MediaStream | null;
+      
+      try {
+        // 处理视频轨道
+        if (track.kind === 'video') {
+          // 如果还没有流，创建新流
+          if (!currentStream) {
+            currentStream = new MediaStream();
+          }
+          
+          // 替换现有视频轨道
+          const existingVideoTracks = currentStream.getVideoTracks();
+          existingVideoTracks.forEach(existingTrack => {
+            currentStream!.removeTrack(existingTrack);
+          });
+          currentStream.addTrack(track.mediaStreamTrack);
+          
+          // 确保视频元素配置正确
+          if (videoRef.current.srcObject !== currentStream) {
+            videoRef.current.srcObject = currentStream;
+            videoRef.current.autoplay = true;
+            videoRef.current.playsInline = true;
+            videoRef.current.muted = false; // 允许观众听到声音
+          }
+          console.log('远程视频轨道已成功绑定到视频元素');
+        }
+        
+        // 处理音频轨道
+        if (track.kind === 'audio') {
+          // 如果还没有流，创建新流
+          if (!currentStream) {
+            currentStream = new MediaStream();
+          }
+          
+          // 替换现有音频轨道
+          const existingAudioTracks = currentStream.getAudioTracks();
+          existingAudioTracks.forEach(existingTrack => {
+            currentStream!.removeTrack(existingTrack);
+          });
+          currentStream.addTrack(track.mediaStreamTrack);
+          
+          // 确保视频元素配置正确
+          if (videoRef.current.srcObject !== currentStream) {
+            videoRef.current.srcObject = currentStream;
+            videoRef.current.autoplay = true;
+            videoRef.current.playsInline = true;
+            videoRef.current.muted = false; // 允许观众听到声音
+          }
+          console.log('远程音频轨道已成功绑定到媒体流');
+        }
+      } catch (error) {
+        console.error('处理远程轨道时出错:', error);
       }
     });
 
@@ -190,30 +209,36 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           console.log('更新屏幕分享状态为: true');
         }
         
-        // 获取当前视频流或创建新流
-        let currentStream: MediaStream | null = null;
-        if (videoRef.current?.srcObject instanceof MediaStream) {
-          currentStream = videoRef.current.srcObject as MediaStream;
+        // 确保videoRef.current存在
+        if (!videoRef.current) {
+          console.log('警告：videoRef.current为null，无法处理媒体轨道');
+          return;
         }
+        
+        // 获取当前流或创建新流
+        let currentStream = videoRef.current.srcObject as MediaStream | null;
         
         // 处理视频轨道
         if (publication.track.kind === 'video') {
-          const videoStream = new MediaStream([publication.track.mediaStreamTrack]);
-          
-          // 如果有音频轨道，添加到视频流中
+          // 创建包含音频和视频的完整流
           if (currentStream) {
-            const audioTracks = currentStream.getAudioTracks();
-            audioTracks.forEach(track => videoStream.addTrack(track));
+            // 如果已有流，替换视频轨道
+            const existingVideoTracks = currentStream.getVideoTracks();
+            existingVideoTracks.forEach(existingTrack => {
+              currentStream!.removeTrack(existingTrack);
+            });
+            currentStream.addTrack(publication.track.mediaStreamTrack);
+          } else {
+            // 创建新流
+            currentStream = new MediaStream([publication.track.mediaStreamTrack]);
           }
           
           // 设置主视频元素
-          if (videoRef.current) {
-            videoRef.current.srcObject = videoStream;
-            videoRef.current.autoplay = true;
-            videoRef.current.playsInline = true;
-            videoRef.current.muted = !isPublisher;
-            console.log('本地视频轨道已绑定到主视频元素');
-          }
+          videoRef.current.srcObject = currentStream;
+          videoRef.current.autoplay = true;
+          videoRef.current.playsInline = true;
+          videoRef.current.muted = !isPublisher; // 主播静音，观众能听到
+          console.log('本地视频轨道已绑定到主视频元素');
           
           // 设置本地预览元素（仅摄像头）
           if (localVideoRef.current && publication.source !== 'screen_share') {
@@ -228,20 +253,17 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         // 处理音频轨道
         if (publication.track.kind === 'audio') {
           if (currentStream) {
-            // 移除现有音频轨道
+            // 如果已有流，添加或替换音频轨道
             const existingAudioTracks = currentStream.getAudioTracks();
-            existingAudioTracks.forEach(track => currentStream?.removeTrack(track));
-            
-            // 添加新音频轨道
+            existingAudioTracks.forEach(existingTrack => {
+              currentStream!.removeTrack(existingTrack);
+            });
             currentStream.addTrack(publication.track.mediaStreamTrack);
-            console.log('本地音频轨道已更新到视频流');
-          } else if (videoRef.current) {
-            // 如果没有视频流，创建仅音频流
-            videoRef.current.srcObject = new MediaStream([publication.track.mediaStreamTrack]);
-            videoRef.current.autoplay = true;
-            videoRef.current.playsInline = true;
-            console.log('本地音频轨道已绑定到视频元素');
+          } else {
+            // 创建新流
+            currentStream = new MediaStream([publication.track.mediaStreamTrack]);
           }
+          console.log('本地音频轨道已绑定到媒体流');
         }
       }
       
@@ -341,11 +363,22 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       if (isPublishing) {
         // 停止发布
         console.log('停止发布流...');
-        await roomRef.current.localParticipant.setCameraEnabled(false);
-        await roomRef.current.localParticipant.setMicrophoneEnabled(false);
-        await roomRef.current.localParticipant.setScreenShareEnabled(false);
+        
+        // 使用Promise.allSettled确保即使某些操作失败，其他操作仍能继续执行
+        await Promise.allSettled([
+          // 停止所有媒体轨道
+          roomRef.current.localParticipant.setCameraEnabled(false),
+          roomRef.current.localParticipant.setMicrophoneEnabled(false),
+          roomRef.current.localParticipant.setScreenShareEnabled(false)
+        ]);
+        
+        // 立即更新状态
         setIsPublishing(false);
-        console.log('已停止发布流');
+        setIsCameraEnabled(false);
+        setIsMicrophoneEnabled(false);
+        setIsScreenSharing(false);
+        
+        console.log('已停止发布流，所有媒体轨道已关闭');
       } else {
         // 开始发布 - 让LiveKit内部处理媒体流和权限
         console.log('开始发布流...');
@@ -392,6 +425,14 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       console.error('开播/停止直播失败:', err);
       console.error('错误详情:', (err as Error).stack);
       setError('操作失败: ' + (err as Error).message);
+      
+      // 即使出错，也确保状态正确
+      if (isPublishing) {
+        setIsPublishing(false);
+        setIsCameraEnabled(false);
+        setIsMicrophoneEnabled(false);
+        setIsScreenSharing(false);
+      }
     }
   };
 
@@ -565,23 +606,28 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       timestamp: Date.now()
     };
     
+    // 先发送消息到服务器，避免UI更新导致的渲染问题
+    if (roomRef.current) {
+      try {
+        // 使用LiveKit数据通道发送消息
+        roomRef.current.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify(newMessage)),
+          {
+            topic: 'chat',
+            reliable: true
+          }
+        );
+        console.log('消息已发送到服务器:', newMessage);
+      } catch (error) {
+        console.error('发送消息到服务器失败:', error);
+      }
+    }
+    
+    // 再更新本地UI，避免阻塞发送逻辑
     setChatMessages(prev => [...prev, newMessage]);
     setInputMessage('');
     
-    // 这里可以添加发送到服务器的逻辑
-    console.log('发送消息:', newMessage);
-    
-    // TODO: 集成LiveKit数据通道发送消息
-    if (roomRef.current) {
-      // 使用LiveKit数据通道发送消息
-      roomRef.current.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(newMessage)),
-        {
-          topic: 'chat',
-          reliable: true
-        }
-      );
-    }
+    console.log('已添加本地聊天消息:', newMessage);
   };
 
   // 处理输入框变化
@@ -885,7 +931,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '4px',
                   color: '#fff',
-                  fontSize: '10px',
+                  fontSize: '16px', /* 增加到16px，避免移动端自动放大 */
                   outline: 'none',
                   boxSizing: 'border-box',
                   lineHeight: '20px'
