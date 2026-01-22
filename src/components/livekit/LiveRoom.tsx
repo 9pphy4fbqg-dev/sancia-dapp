@@ -395,78 +395,35 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       return;
     }
 
-    // 检查连接状态
-    if (connectionState !== ConnectionState.Connected) {
-      console.error('无法开播：连接状态为:', connectionState);
-      setError('未连接到服务器，请检查网络连接');
-      return;
-    }
-
     try {
       console.log('=== 开始执行togglePublishing ===');
       console.log('当前isPublishing状态:', isPublishing);
-      console.log('当前isCameraEnabled状态:', isCameraEnabled);
-      console.log('当前isMicrophoneEnabled状态:', isMicrophoneEnabled);
-      console.log('当前isScreenSharing状态:', isScreenSharing);
-      console.log('当前连接状态:', connectionState);
-
+      
       if (isPublishing) {
-        // 停止发布并彻底断开服务器连接
-        console.log('停止发布直播流并断开服务器连接...');
+        // 停止直播 - 断开服务器连接
+        console.log('停止直播，断开服务器连接...');
         
-        // 1. 停止所有媒体轨道的发布
-        await Promise.allSettled([
-          roomRef.current.localParticipant.setCameraEnabled(false),
-          roomRef.current.localParticipant.setMicrophoneEnabled(false),
-          roomRef.current.localParticipant.setScreenShareEnabled(false)
-        ]);
-        
-        // 2. 断开与LiveKit服务器的连接
-        console.log('断开LiveKit服务器连接...');
+        // 断开与LiveKit服务器的连接
         roomRef.current.disconnect();
         roomRef.current = null;
         
-        // 3. 更新所有状态
+        // 更新所有状态
         setIsPublishing(false);
         setIsCameraEnabled(false);
         setIsMicrophoneEnabled(false);
         setIsScreenSharing(false);
         
-        console.log('已停止发布流并断开服务器连接，所有直播状态已结束');
+        console.log('已停止直播并断开服务器连接');
       } else {
-        // 开始发布直播流
-        console.log('开始发布直播流...');
+        // 开始直播 - 连接服务器
+        console.log('开始直播...');
         
-        let hasPublished = false;
-        
-        // 根据当前设备状态发布相应轨道
-        if (isCameraEnabled) {
-          console.log('发布摄像头轨道...');
-          await roomRef.current.localParticipant.setCameraEnabled(true);
-          hasPublished = true;
+        // 检查连接状态，如果已连接直接开始直播
+        if (connectionState === ConnectionState.Connected) {
+          console.log('已连接到服务器，开始发布流');
+          setIsPublishing(true);
         }
         
-        if (isMicrophoneEnabled) {
-          console.log('发布麦克风轨道...');
-          await roomRef.current.localParticipant.setMicrophoneEnabled(true);
-          hasPublished = true;
-        }
-        
-        if (isScreenSharing) {
-          console.log('发布屏幕分享轨道...');
-          await roomRef.current.localParticipant.setScreenShareEnabled(true);
-          hasPublished = true;
-        }
-        
-        // 如果没有启用任何设备，提示用户
-        if (!hasPublished) {
-          console.error('无法开播：请先开启至少一个设备（摄像头、麦克风或屏幕分享）');
-          setError('请先开启至少一个设备（摄像头、麦克风或屏幕分享）');
-          return;
-        }
-        
-        // 更新发布状态
-        setIsPublishing(true);
         console.log('直播已开始！');
       }
     } catch (err) {
@@ -474,29 +431,23 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       console.error('错误详情:', (err as Error).stack);
       setError('操作失败: ' + (err as Error).message);
       
-      // 即使出错，也确保发布状态正确
+      // 重置状态
       if (isPublishing) {
-        // 如果是停止直播出错，确保发布状态为false
         setIsPublishing(false);
+        setIsCameraEnabled(false);
+        setIsMicrophoneEnabled(false);
+        setIsScreenSharing(false);
       }
-      // 开播失败时，不重置设备状态，保持用户的设备偏好
     }
   };
 
   // 切换摄像头
   const toggleCamera = async () => {
     console.log('toggleCamera函数被调用了！');
-    console.log('isPublisher:', isPublisher);
-    console.log('roomRef.current是否存在:', !!roomRef.current);
     
-    if (!roomRef.current || !isPublisher) {
+    // 只有在直播状态下才能切换设备
+    if (!roomRef.current || !isPublisher || !isPublishing) {
       console.log('toggleCamera函数返回，条件不满足');
-      return;
-    }
-
-    if (connectionState !== ConnectionState.Connected) {
-      console.error('无法切换摄像头：连接状态为:', connectionState);
-      setError('未连接到服务器，请检查网络连接');
       return;
     }
 
@@ -504,23 +455,17 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       const newState = !isCameraEnabled;
       console.log('切换摄像头状态，新状态:', newState);
       
-      // 先更新本地状态
+      // 更新本地状态
       setIsCameraEnabled(newState);
       
-      if (isPublishing) {
-        // 已经开播，直接更新摄像头状态
-        console.log('更新摄像头状态到:', newState);
-        await roomRef.current.localParticipant.setCameraEnabled(newState);
-        console.log('摄像头状态更新成功');
-      } else if (newState) {
-        // 未开播且开启摄像头，自动开播
-        console.log('摄像头已开启，自动开播...');
-        await togglePublishing();
-      }
+      // 直接调用LiveKit API切换摄像头轨道
+      console.log('切换摄像头轨道...');
+      await roomRef.current.localParticipant.setCameraEnabled(newState);
+      console.log('摄像头状态更新成功');
     } catch (err) {
       console.error('切换摄像头失败:', err);
       setError('操作失败: ' + (err as Error).message);
-      // 恢复状态 - 使用当前状态的反值，而不是newState（因为newState只在try块内有效）
+      // 恢复状态
       setIsCameraEnabled(!isCameraEnabled);
     }
   };
@@ -528,7 +473,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   // 切换前后摄像头
   const toggleCameraFacing = async () => {
     console.log('toggleCameraFacing函数被调用了！');
-    console.log('isPublisher:', isPublisher);
     
     if (!isPublisher) {
       console.log('toggleCameraFacing函数返回，isPublisher为false');
@@ -542,7 +486,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       setCurrentCameraFacing(newFacing);
       
       // 如果摄像头已经开启，重新获取媒体流
-      if (isCameraEnabled && isPublishing && roomRef.current) {
+      if (isCameraEnabled && roomRef.current) {
         console.log('重新获取媒体流，先关闭摄像头...');
         await roomRef.current.localParticipant.setCameraEnabled(false);
         console.log('重新开启摄像头...');
@@ -557,10 +501,9 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   // 切换麦克风
   const toggleMicrophone = async () => {
     console.log('toggleMicrophone函数被调用了！');
-    console.log('isPublisher:', isPublisher);
-    console.log('roomRef.current是否存在:', !!roomRef.current);
     
-    if (!roomRef.current || !isPublisher) {
+    // 只有在直播状态下才能切换设备
+    if (!roomRef.current || !isPublisher || !isPublishing) {
       console.log('toggleMicrophone函数返回，条件不满足');
       return;
     }
@@ -569,23 +512,17 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       const newState = !isMicrophoneEnabled;
       console.log('切换麦克风状态，新状态:', newState);
       
-      // 先更新本地状态
+      // 更新本地状态
       setIsMicrophoneEnabled(newState);
       
-      if (isPublishing) {
-        // 已经开播，直接更新麦克风状态
-        console.log('更新麦克风状态到:', newState);
-        await roomRef.current.localParticipant.setMicrophoneEnabled(newState);
-        console.log('麦克风状态更新成功');
-      } else if (newState) {
-        // 未开播且开启麦克风，自动开播
-        console.log('麦克风已开启，自动开播...');
-        await togglePublishing();
-      }
+      // 直接调用LiveKit API切换麦克风轨道
+      console.log('切换麦克风轨道...');
+      await roomRef.current.localParticipant.setMicrophoneEnabled(newState);
+      console.log('麦克风状态更新成功');
     } catch (err) {
       console.error('切换麦克风失败:', err);
       setError('操作失败: ' + (err as Error).message);
-      // 恢复状态 - 使用当前状态的反值，而不是newState（因为newState只在try块内有效）
+      // 恢复状态
       setIsMicrophoneEnabled(!isMicrophoneEnabled);
     }
   };
@@ -597,45 +534,30 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
     console.log('roomRef.current是否存在:', !!roomRef.current);
     console.log('当前isPublishing状态:', isPublishing);
     console.log('当前isScreenSharing状态:', isScreenSharing);
-    console.log('当前连接状态:', connectionState);
     
-    if (!roomRef.current || !isPublisher) {
+    // 只有在直播状态下才能切换设备
+    if (!roomRef.current || !isPublisher || !isPublishing) {
       console.log('toggleScreenSharing函数返回，条件不满足');
       return;
     }
 
-    if (connectionState !== ConnectionState.Connected) {
-      console.error('无法切换屏幕分享：连接状态为:', connectionState);
-      setError('未连接到服务器，请检查网络连接');
-      return;
-    }
-
-    const newState = !isScreenSharing;
     try {
+      const newState = !isScreenSharing;
       console.log('切换屏幕分享状态，新状态:', newState);
       
-      // 先更新本地状态
+      // 更新本地状态
       setIsScreenSharing(newState);
       
-      if (isPublishing) {
-        // 已经开播，直接更新屏幕分享状态
-        console.log('更新屏幕分享状态到:', newState);
-        await roomRef.current.localParticipant.setScreenShareEnabled(newState);
-        console.log('屏幕分享状态更新成功');
-      } else if (newState) {
-        // 未开播且开启屏幕分享，自动开播
-        console.log('屏幕分享已开启，自动开播...');
-        await togglePublishing();
-      }
+      // 直接调用LiveKit API切换屏幕分享轨道
+      console.log('切换屏幕分享轨道...');
+      await roomRef.current.localParticipant.setScreenShareEnabled(newState);
+      console.log('屏幕分享状态更新成功');
     } catch (err) {
       console.error('切换屏幕分享失败:', err);
       console.error('错误详情:', (err as Error).stack);
       setError('操作失败: ' + (err as Error).message);
       // 恢复状态
-      if (isPublishing) {
-        setIsPublishing(false);
-      }
-      setIsScreenSharing(!newState);
+      setIsScreenSharing(!isScreenSharing);
     }
   };
 
