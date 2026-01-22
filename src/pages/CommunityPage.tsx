@@ -115,19 +115,42 @@ const CommunityPage = () => {
     }
   }, [address, getToken]);
   
-  // 当选择的房间或钱包地址变化时，生成新的令牌
+  // 当选择的房间、钱包地址或getToken变化时，生成新的令牌
   useEffect(() => {
-    if (selectedRoom && address) {
+    // 确保address和getToken都已准备好
+    if (!address) {
+      console.log('等待钱包连接...');
+      return;
+    }
+    
+    if (!getToken) {
+      console.log('等待getToken函数初始化...');
+      return;
+    }
+    
+    console.log('开始生成LiveKit令牌...');
+    
+    if (selectedRoom) {
       const isPublisher = selectedRoom.type === 'official' 
         ? OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '') 
         : address?.toLowerCase() === selectedRoom.creator?.toLowerCase();
       
+      console.log('🔍 计算直播权限:', {
+        roomType: selectedRoom.type,
+        address: address?.toLowerCase(),
+        officialHosts: OFFICIAL_HOST_WALLET_ADDRESSES,
+        isPublisher,
+        creator: selectedRoom.creator?.toLowerCase()
+      });
+      
       generateToken(selectedRoom.id, isPublisher);
-    } else if (address) {
+    } else {
       // 默认生成官方直播间的令牌
-      generateToken(OFFICIAL_ROOM_ID, OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || ''));
+      const isOfficialPublisher = OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '');
+      console.log('生成官方直播间令牌，isOfficialPublisher:', isOfficialPublisher);
+      generateToken(OFFICIAL_ROOM_ID, isOfficialPublisher);
     }
-  }, [selectedRoom, address, generateToken]);
+  }, [selectedRoom, address, generateToken, getToken]);
 
   // 加载房间列表
   useEffect(() => {

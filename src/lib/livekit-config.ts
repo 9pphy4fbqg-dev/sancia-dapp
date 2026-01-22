@@ -1,9 +1,13 @@
 // LiveKit Cloud配置
+// 官方最佳实践：将API密钥和密钥存储在环境变量中，避免硬编码
 
 // 确保URL格式正确，包含完整的WebSocket协议和路径
-export const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://sancia-23mx280n.livekit.cloud';
-export const LIVEKIT_API_KEY = import.meta.env.VITE_LIVEKIT_API_KEY || 'APIXWCFjpZa6VEn';
-export const LIVEKIT_API_SECRET = import.meta.env.VITE_LIVEKIT_API_SECRET || 'SoKNkUcd9KuBuMen4cyGVa6x9rMvN66ufIczmSXi9sf';
+export const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
+
+// 生产环境中，API密钥和密钥不应暴露在前端
+// 以下配置仅用于开发环境，生产环境应通过后端服务获取token
+export const LIVEKIT_API_KEY = import.meta.env.VITE_LIVEKIT_API_KEY;
+export const LIVEKIT_API_SECRET = import.meta.env.VITE_LIVEKIT_API_SECRET;
 
 // 官方直播间配置
 export const OFFICIAL_ROOM_ID = 'official';
