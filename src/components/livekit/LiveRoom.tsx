@@ -27,6 +27,8 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [showLocalPreview, setShowLocalPreview] = useState(isPublisher);
   const [currentCameraFacing, setCurrentCameraFacing] = useState<'user' | 'environment'>('user'); // 当前摄像头朝向
   const [microphoneVolume, setMicrophoneVolume] = useState(0); // 麦克风音量，0-100
+  const [audioActivated, setAudioActivated] = useState(false); // 音频是否已激活
+  const [showAudioPrompt, setShowAudioPrompt] = useState(false); // 是否显示音频提示
   // 聊天组件直接开启，不需要隐藏功能，移除相关状态
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -561,6 +563,54 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
 
   }, [isPublisher, isPublishing, isMicrophoneEnabled]);
 
+  // 音频激活函数
+  const activateAudio = async () => {
+    try {
+      // 创建音频上下文并激活
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // 如果有视频元素，确保其不静音
+      if (videoRef.current) {
+        videoRef.current.muted = false;
+      }
+      
+      // 更新状态
+      setAudioActivated(true);
+      setShowAudioPrompt(false);
+      console.log('🔊 音频已激活');
+    } catch (error) {
+      console.error('激活音频失败:', error);
+    }
+  };
+
+  // 音频检测和提示
+  useEffect(() => {
+    if (!isPublisher) {
+      // 检测音频是否能自动播放
+      const testAudio = async () => {
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          
+          // 尝试自动激活音频上下文
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+            setAudioActivated(true);
+            console.log('🔊 音频可自动播放');
+          }
+        } catch (error) {
+          // 自动激活失败，需要用户交互
+          setShowAudioPrompt(true);
+          console.log('🔊 需要用户交互激活音频');
+        }
+      };
+      
+      testAudio();
+    }
+  }, [isPublisher]);
+
   // 当直播状态变化时，通知父组件
   useEffect(() => {
     if (onLiveStatusChange) {
@@ -733,6 +783,51 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             {isPublishing ? '直播中' : '未直播'}
           </span>
         </div>
+        
+        {/* 音频激活提示 - 仅观众端显示 */}
+        {!isPublisher && showAudioPrompt && !audioActivated && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            fontSize: '16px',
+            zIndex: 20,
+            cursor: 'pointer',
+            padding: '20px'
+          }} onClick={activateAudio}>
+            <div style={{ marginBottom: '16px', fontSize: '32px' }}>🔊</div>
+            <div style={{ marginBottom: '8px', textAlign: 'center' }}>请点击激活音频</div>
+            <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '20px', textAlign: 'center' }}>
+              钱包浏览器需要您的授权才能播放音频
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                activateAudio();
+              }}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#1890ff',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              点击听声音
+            </button>
+          </div>
+        )}
       </div>
       
       {/* 底部控制区域 - 包含聊天和主播控制 */}
