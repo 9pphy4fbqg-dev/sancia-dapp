@@ -26,7 +26,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [showLocalPreview, setShowLocalPreview] = useState(isPublisher);
   const [currentCameraFacing, setCurrentCameraFacing] = useState<'user' | 'environment'>('user'); // 当前摄像头朝向
-  const [microphoneVolume, setMicrophoneVolume] = useState(0); // 麦克风音量，0-100
   const [showAudioPermission, setShowAudioPermission] = useState(true); // 音频授权弹窗显示状态，初始为true
   // 聊天组件直接开启，不需要隐藏功能，移除相关状态
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
@@ -404,10 +403,14 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       const newFacing = currentCameraFacing === 'user' ? 'environment' : 'user';
       setCurrentCameraFacing(newFacing);
       
-      // 如果摄像头已经开启，重新获取媒体流
+      // 如果摄像头已经开启，重新获取媒体流并指定正确的摄像头方向
       if (isCameraEnabled && roomRef.current) {
+        // 先禁用摄像头
         await roomRef.current.localParticipant.setCameraEnabled(false);
-        await roomRef.current.localParticipant.setCameraEnabled(true);
+        // 然后重新启用摄像头，并指定摄像头方向
+        await roomRef.current.localParticipant.setCameraEnabled(true, {
+          facingMode: newFacing
+        });
       }
     } catch (err) {
       console.error('切换前后摄像头失败:', err);
@@ -512,55 +515,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       chatContentRef.current.scrollTop = chatContentRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
-  // 麦克风音量监控
-  useEffect(() => {
-    if (!isPublisher || !isPublishing || !isMicrophoneEnabled) {
-      return;
-    }
-
-    // 创建音频上下文和分析器
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    // 获取麦克风音频流
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        // 创建媒体源节点
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
-
-        // 定期检查音量
-        const updateVolume = () => {
-          analyser.getByteFrequencyData(dataArray);
-          
-          // 计算音量平均值
-          const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-          // 将音量映射到0-100范围
-          const volume = Math.min(Math.round(average * (100 / 255)), 100);
-          setMicrophoneVolume(volume);
-          
-          // 继续监控
-          if (isMicrophoneEnabled && isPublishing) {
-            requestAnimationFrame(updateVolume);
-          }
-        };
-
-        updateVolume();
-
-        // 清理函数
-        return () => {
-          stream.getTracks().forEach(track => track.stop());
-          audioContext.close();
-        };
-      })
-      .catch(error => {
-        console.error('获取麦克风音频流失败:', error);
-      });
-
-  }, [isPublisher, isPublishing, isMicrophoneEnabled]);
 
   // 音频授权函数
   const handleAudioPermission = async () => {
@@ -1048,46 +1002,6 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 <SoundOutlined style={{ fontSize: '16px' }} />
               </button>
               
-              {/* 麦克风音量显示 */}
-              {isMicrophoneEnabled && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid #666',
-                  width: '14px',
-                  boxSizing: 'border-box'
-                }}>
-                  {/* 音量数值 */}
-                  <div style={{
-                    color: '#fff',
-                    fontSize: '12px',
-                    textAlign: 'center',
-                    width: '100%'
-                  }}>{microphoneVolume}%</div>
-                  {/* 音量条 */}
-                  <div style={{
-                    marginTop: '2px',
-                    width: '100%',
-                    height: '2px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '1px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      backgroundColor: microphoneVolume > 80 ? '#ff4d4f' : microphoneVolume > 50 ? '#faad14' : '#52c41a',
-                      width: `${microphoneVolume}%`,
-                      transition: 'width 0.1s ease-out'
-                    }}></div>
-                  </div>
-                </div>
-              )}
-
               {/* 屏幕分享开关 */}
               <button
                 onClick={toggleScreenSharing}

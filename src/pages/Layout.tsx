@@ -40,14 +40,14 @@ const Layout: React.FC = () => {
     setLanguage(currentLanguage === 'zh' ? 'en' : 'zh');
   };
 
-  // 处理功能按钮点击，暂时注释掉钱包连接检查
+  // 处理功能按钮点击
   const handleFeatureClick = (e: React.MouseEvent) => {
-    // 暂时注释掉钱包连接检查，允许直接访问所有功能
-    // if (!isConnected) {
-    //   message.info(t('connectWallet'));
-    //   e.preventDefault();
-    //   return;
-    // }
+    // 检查钱包是否连接
+    if (!isConnected) {
+      message.info(t('connectWallet'));
+      e.preventDefault();
+      return;
+    }
   };
 
   // 初始化扫描器
