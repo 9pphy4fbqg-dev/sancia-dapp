@@ -10,9 +10,10 @@ interface LiveRoomProps {
   identity: string;
   isPublisher: boolean;
   metadata?: Record<string, any>;
+  onLiveStatusChange?: (isLive: boolean) => void;
 }
 
-const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublisher, metadata }) => {
+const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublisher, metadata, onLiveStatusChange }) => {
   const roomRef = useRef<Room | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -657,6 +658,13 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       chatContentRef.current.scrollTop = chatContentRef.current.scrollHeight;
     }
   }, [chatMessages]);
+
+  // 当直播状态变化时，通知父组件
+  useEffect(() => {
+    if (onLiveStatusChange) {
+      onLiveStatusChange(isPublishing);
+    }
+  }, [isPublishing, onLiveStatusChange]);
 
   // 动态注入样式，覆盖全局移动端样式
   useEffect(() => {

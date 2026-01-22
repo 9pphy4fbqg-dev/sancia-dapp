@@ -82,6 +82,7 @@ const CommunityPage = () => {
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [selectedPosition, setSelectedPosition] = useState<string | null>(null); // 跟踪选中的职位
+  const [officialRoomLiveStatus, setOfficialRoomLiveStatus] = useState(false); // 跟踪官方直播间的直播状态
   
   // LiveKit token hook
   const { getToken, isLoading: isTokenLoading, error: tokenHookError } = useLiveKitToken();
@@ -236,6 +237,23 @@ const CommunityPage = () => {
           token={liveKitToken}
           isPublisher={OFFICIAL_HOST_WALLET_ADDRESSES.includes(address?.toLowerCase() || '')}
           metadata={{ address }}
+          onLiveStatusChange={(isLive) => {
+            console.log('官方直播间直播状态变化:', isLive);
+            setOfficialRoomLiveStatus(isLive);
+            
+            // 更新房间列表中的官方直播间状态
+            setRooms(prevRooms => {
+              const updatedRooms = [...prevRooms];
+              const officialRoomIndex = updatedRooms.findIndex(room => room.id === OFFICIAL_ROOM_ID);
+              if (officialRoomIndex !== -1) {
+                updatedRooms[officialRoomIndex] = {
+                  ...updatedRooms[officialRoomIndex],
+                  isLive
+                };
+              }
+              return updatedRooms;
+            });
+          }}
         />
       </div>
 
