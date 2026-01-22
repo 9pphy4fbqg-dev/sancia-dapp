@@ -27,7 +27,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [showLocalPreview, setShowLocalPreview] = useState(isPublisher);
   const [currentCameraFacing, setCurrentCameraFacing] = useState<'user' | 'environment'>('user'); // 当前摄像头朝向
   const [microphoneVolume, setMicrophoneVolume] = useState(0); // 麦克风音量，0-100
-  const [showAudioPermission, setShowAudioPermission] = useState(false); // 音频授权弹窗显示状态
+  const [showAudioPermission, setShowAudioPermission] = useState(true); // 音频授权弹窗显示状态，初始为true
   // 聊天组件直接开启，不需要隐藏功能，移除相关状态
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; from: string; content: string; timestamp: number }>>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -758,7 +758,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         </div>
         
         {/* 音频授权弹窗 - 仅观众端显示 */}
-        {!isPublisher && (
+        {!isPublisher && showAudioPermission && (
           <div style={{
             position: 'absolute',
             bottom: '20px',
