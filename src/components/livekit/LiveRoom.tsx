@@ -164,7 +164,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       });
 
       // 处理接收到的数据通道消息
-      room.on(RoomEvent.DataReceived, (payload, participant) => {
+      room.on(RoomEvent.DataReceived, (payload, participant, _kind, _topic) => {
         try {
           const message = JSON.parse(new TextDecoder().decode(payload));
           
@@ -485,7 +485,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         });
 
         // 处理接收到的数据通道消息
-        room.on(RoomEvent.DataReceived, (payload, participant) => {
+        room.on(RoomEvent.DataReceived, (payload, participant, _kind, _topic) => {
           try {
             const message = JSON.parse(new TextDecoder().decode(payload));
             
