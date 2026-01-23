@@ -197,7 +197,16 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                   setIsRequestingMic(false);
                   setJoinMicRequested(false);
                   // 开启麦克风
-                  roomRef.current?.localParticipant.setMicrophoneEnabled(true);
+                  if (roomRef.current) {
+                    // 直接调用setMicrophoneEnabled，LiveKit会自动创建和发布麦克风轨道
+                    roomRef.current.localParticipant.setMicrophoneEnabled(true)
+                      .then(() => {
+                        console.log('麦克风轨道已成功发布');
+                      })
+                      .catch(error => {
+                        console.error('发布麦克风轨道失败:', error);
+                      });
+                  }
                 }
                 break;
               
@@ -518,7 +527,16 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     setIsRequestingMic(false);
                     setJoinMicRequested(false);
                     // 开启麦克风
-                    roomRef.current?.localParticipant.setMicrophoneEnabled(true);
+                    if (roomRef.current) {
+                      // 直接调用setMicrophoneEnabled，LiveKit会自动创建和发布麦克风轨道
+                      roomRef.current.localParticipant.setMicrophoneEnabled(true)
+                        .then(() => {
+                          console.log('麦克风轨道已成功发布');
+                        })
+                        .catch(error => {
+                          console.error('发布麦克风轨道失败:', error);
+                        });
+                    }
                   }
                   break;
                 
@@ -833,6 +851,9 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       
       // 从请求列表中移除
       setMicRequestingUsers(prev => prev.filter(id => id !== userId));
+      
+      // 将用户添加到已连接连麦观众列表中
+      setConnectedAudience(prev => [...prev, userId]);
     } catch (err) {
       console.error('批准连麦请求失败:', err);
       setError('批准连麦请求失败: ' + (err as Error).message);
