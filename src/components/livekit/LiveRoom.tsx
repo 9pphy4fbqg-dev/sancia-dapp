@@ -164,7 +164,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
       });
 
       // 处理接收到的数据通道消息
-      room.on(RoomEvent.DataReceived, (payload, participant, kind) => {
+      room.on(RoomEvent.DataReceived, (payload, participant) => {
         try {
           const message = JSON.parse(new TextDecoder().decode(payload));
           
@@ -484,15 +484,72 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           }
         });
 
-        // 处理接收到的聊天消息
-        room.on(RoomEvent.DataReceived, (payload) => {
+        // 处理接收到的数据通道消息
+        room.on(RoomEvent.DataReceived, (payload, participant) => {
           try {
             const message = JSON.parse(new TextDecoder().decode(payload));
+            
+            // 处理聊天消息
             if (message.content && message.from && message.timestamp && message.from !== identity) {
               setChatMessages(prev => [...prev, message]);
             }
+            
+            // 处理连麦请求相关消息
+            if (message.type) {
+              switch (message.type) {
+                case 'mic_request':
+                  // 主播端接收到连麦请求
+                  if (isPublisher && message.from !== identity) {
+                    setMicRequestingUsers(prev => [...prev, message.from]);
+                  }
+                  break;
+                
+                case 'cancel_mic_request':
+                  // 主播端接收到取消连麦请求
+                  if (isPublisher && message.from !== identity) {
+                    setMicRequestingUsers(prev => prev.filter(id => id !== message.from));
+                  }
+                  break;
+                
+                case 'approve_mic':
+                  // 观众端接收到批准连麦消息
+                  if (!isPublisher && message.to === identity) {
+                    setIsMicConnected(true);
+                    setIsRequestingMic(false);
+                    setJoinMicRequested(false);
+                    // 开启麦克风
+                    roomRef.current?.localParticipant.setMicrophoneEnabled(true);
+                  }
+                  break;
+                
+                case 'reject_mic':
+                  // 观众端接收到拒绝连麦消息
+                  if (!isPublisher && message.to === identity) {
+                    setIsRequestingMic(false);
+                    setJoinMicRequested(false);
+                  }
+                  break;
+                
+                case 'leave_mic':
+                  // 主播端接收到观众断开连麦消息
+                  if (isPublisher && message.from !== identity) {
+                    setConnectedAudience(prev => prev.filter(id => id !== message.from));
+                  }
+                  break;
+                
+                case 'disconnect_mic':
+                  // 观众端接收到主播断开连麦消息
+                  if (!isPublisher && message.to === identity) {
+                    setIsMicConnected(false);
+                    setJoinMicRequested(false);
+                    // 关闭麦克风
+                    roomRef.current?.localParticipant.setMicrophoneEnabled(false);
+                  }
+                  break;
+              }
+            }
           } catch (err) {
-            console.error('解析聊天消息失败:', err);
+            console.error('解析数据通道消息失败:', err);
           }
         });
 
