@@ -5,7 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/', // Vercel部署使用根路径
+  base: './', // GitHub Pages部署使用相对路径
   server: {
     port: 3000,
     open: true,
