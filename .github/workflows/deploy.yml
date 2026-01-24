@@ -30,21 +30,21 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
-
-
+        run: |
+          echo "当前目录: $(pwd)"
+          echo "开始安装依赖..."
+          npm install --verbose
+          echo "依赖安装完成!"
 
       - name: Build
         run: |
           echo "当前目录: $(pwd)"
-          echo "components-js目录是否存在: $(ls -la components-js)"
-          echo "components-js/packages/react/src目录是否存在: $(ls -la components-js/packages/react/src)"
-          npm run build 2>&1 | tee build-error.log
-          if [ $? -ne 0 ]; then
-            echo "构建失败，以下是错误信息:"
-            cat build-error.log
-            exit 1
-          fi
+          echo "构建环境信息:"
+          node --version
+          npm --version
+          echo "开始构建..."
+          npm run build --verbose
+          echo "构建完成!"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
