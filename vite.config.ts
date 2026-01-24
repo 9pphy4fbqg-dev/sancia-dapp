@@ -18,9 +18,10 @@ export default defineConfig({
   },
   envPrefix: ['REACT_APP_', 'VITE_'], // 支持REACT_APP_和VITE_前缀的环境变量
   resolve: {
-    // 将@livekit/components-react别名指向本地修改后的组件目录
+    // 将@livekit/components-react和@livekit/components-core别名指向本地修改后的组件目录
     alias: {
-      '@livekit/components-react': path.resolve(__dirname, './components-js/packages/react/src')
+      '@livekit/components-react': path.resolve(__dirname, './components-js/packages/react/src'),
+      '@livekit/components-core': path.resolve(__dirname, './components-js/packages/core/src')
     }
   }
 })

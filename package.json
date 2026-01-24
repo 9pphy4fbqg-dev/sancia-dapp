@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@livekit/components-core": "file:./components-js/packages/core",
+    "@livekit/components-react": "file:./components-js/packages/react",
     "@livekit/components-styles": "^1.2.0",
     "@rainbow-me/rainbowkit": "^2.0.0",
     "@reduxjs/toolkit": "^2.2.0",
