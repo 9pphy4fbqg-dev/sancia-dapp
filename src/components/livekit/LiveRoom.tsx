@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import '@livekit/components-styles';
-import { Room, ConnectionState, RoomEvent, Track, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { Room, ConnectionState, RoomEvent, Track, VideoPresets, RemoteParticipant, createLocalAudioTrack, LocalAudioTrack } from 'livekit-client';
 import { LIVEKIT_URL } from '../../lib/livekit-config';
 import { PlayCircleOutlined, PauseCircleOutlined, CameraOutlined, SoundOutlined, DesktopOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 
@@ -20,6 +20,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const chatContentRef = useRef<HTMLDivElement>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'connect' | 'mic' | 'other' | null>(null); // 错误类型，用于显示不同的重试按钮
   const [isPublishing, setIsPublishing] = useState(false);
   const [isCameraEnabled, setIsCameraEnabled] = useState(false);
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(false);
@@ -41,12 +42,27 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
   const [micRequestingUsers, setMicRequestingUsers] = useState<string[]>([]); // 主播端显示的请求连麦用户列表
   const [isMicConnected, setIsMicConnected] = useState(false); // 观众是否已连麦
   const [joinMicRequested, setJoinMicRequested] = useState(false); // 观众是否已发送连麦请求
+  const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null); // 保存本地音频轨道引用，用于管理轨道生命周期
+
+  // 错误自动消失效果
+  useEffect(() => {
+    if (error) {
+      // 5秒后自动清除错误
+      const timer = setTimeout(() => {
+        setError(null);
+        setErrorType(null);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   useEffect(() => {
     // 验证必要的配置
     if (!LIVEKIT_URL) {
       const errorMsg = 'LIVEKIT_URL环境变量未配置';
       setError(errorMsg);
+      setErrorType('other');
       return;
     }
     
@@ -196,15 +212,26 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                   setIsMicConnected(true);
                   setIsRequestingMic(false);
                   setJoinMicRequested(false);
-                  // 开启麦克风
+                  
+                  // 按照官方方案：显式创建和发布麦克风轨道
                   if (roomRef.current) {
-                    // 直接调用setMicrophoneEnabled，LiveKit会自动创建和发布麦克风轨道
-                    roomRef.current.localParticipant.setMicrophoneEnabled(true)
-                      .then(() => {
-                        console.log('麦克风轨道已成功发布');
+                    createLocalAudioTrack()
+                      .then((audioTrack: LocalAudioTrack) => {
+                        // 保存音频轨道引用
+                        setLocalAudioTrack(audioTrack);
+                        // 发布音频轨道到房间
+                        return roomRef.current!.localParticipant.publishTrack(audioTrack);
                       })
-                      .catch(error => {
-                        console.error('发布麦克风轨道失败:', error);
+                      .then(() => {
+                        console.log('麦克风轨道已成功创建和发布');
+                      })
+                      .catch((error: Error) => {
+                        console.error('创建或发布麦克风轨道失败:', error);
+                        setError('连麦失败: ' + error.message);
+                        setErrorType('mic');
+                        // 重置状态
+                        setIsMicConnected(false);
+                        setLocalAudioTrack(null);
                       });
                   }
                 }
@@ -274,6 +301,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         } catch (err) {
           console.error('LiveKit连接失败:', err);
           setError('连接LiveKit服务器失败: ' + (err as Error).message);
+          setErrorType('connect');
         }
       };
 
@@ -346,59 +374,59 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         });
 
         // 处理远程轨道订阅
-      room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
-        if (!videoRef.current) return;
-        
-        try {
-          let currentStream = videoRef.current.srcObject as MediaStream | null;
-          if (!currentStream) {
-            currentStream = new MediaStream();
-          }
+        room.on(RoomEvent.TrackSubscribed, (track: Track, publication, participant) => {
+          if (!videoRef.current) return;
           
-          // 对于视频轨道，先移除现有视频轨道，避免多个视频轨道冲突
-          if (track.kind === 'video') {
-            const existingVideoTracks = currentStream.getVideoTracks();
-            existingVideoTracks.forEach(existingTrack => {
-              currentStream!.removeTrack(existingTrack);
-            });
+          try {
+            let currentStream = videoRef.current.srcObject as MediaStream | null;
+            if (!currentStream) {
+              currentStream = new MediaStream();
+            }
             
-            // 添加新视频轨道
-            currentStream.addTrack(track.mediaStreamTrack);
-            
-            // 更新视频元素
-            videoRef.current.srcObject = currentStream;
-            videoRef.current.autoplay = true;
-            videoRef.current.playsInline = true;
-            // 只有主播端静音自己（避免回声），观众端不静音
-            videoRef.current.muted = isPublisher;
-          } 
-          // 对于音频轨道，使用独立的音频元素，支持多个音频轨道同时播放
-          else if (track.kind === 'audio') {
-            // 创建独立的音频元素，不共享MediaStream
-            const audioElement = track.attach();
-            audioElement.autoplay = true;
-            audioElement.muted = false;
-            // 设置id以便后续清理
-            audioElement.id = `audio-${participant.identity}-${publication.trackSid}`;
-            // 添加到body或特定容器中（隐藏显示）
-            audioElement.style.display = 'none';
-            document.body.appendChild(audioElement);
+            // 对于视频轨道，先移除现有视频轨道，避免多个视频轨道冲突
+            if (track.kind === 'video') {
+              const existingVideoTracks = currentStream.getVideoTracks();
+              existingVideoTracks.forEach(existingTrack => {
+                currentStream!.removeTrack(existingTrack);
+              });
+              
+              // 添加新视频轨道
+              currentStream.addTrack(track.mediaStreamTrack);
+              
+              // 更新视频元素
+              videoRef.current.srcObject = currentStream;
+              videoRef.current.autoplay = true;
+              videoRef.current.playsInline = true;
+              // 只有主播端静音自己（避免回声），观众端不静音
+              videoRef.current.muted = isPublisher;
+            } 
+            // 对于音频轨道，使用独立的音频元素，支持多个音频轨道同时播放
+            else if (track.kind === 'audio') {
+              // 创建独立的音频元素，不共享MediaStream
+              const audioElement = track.attach();
+              audioElement.autoplay = true;
+              audioElement.muted = false;
+              // 设置id以便后续清理
+              audioElement.id = `audio-${participant.identity}-${publication.trackSid}`;
+              // 添加到body或特定容器中（隐藏显示）
+              audioElement.style.display = 'none';
+              document.body.appendChild(audioElement);
+            }
+          } catch (error) {
+            console.error('处理远程轨道时出错:', error);
           }
-        } catch (error) {
-          console.error('处理远程轨道时出错:', error);
-        }
-      });
-      
-      // 处理远程轨道取消订阅，清理资源
-      room.on(RoomEvent.TrackUnsubscribed, (track: Track, publication, participant) => {
-        if (track.kind === 'audio') {
-          // 清理独立的音频元素
-          const audioElement = document.getElementById(`audio-${participant.identity}-${publication.trackSid}`);
-          if (audioElement) {
-            document.body.removeChild(audioElement);
+        });
+
+        // 处理远程轨道取消订阅，清理资源
+        room.on(RoomEvent.TrackUnsubscribed, (track: Track, publication, participant) => {
+          if (track.kind === 'audio') {
+            // 清理独立的音频元素
+            const audioElement = document.getElementById(`audio-${participant.identity}-${publication.trackSid}`);
+            if (audioElement) {
+              document.body.removeChild(audioElement);
+            }
           }
-        }
-      });
+        });
 
         // 处理本地轨道发布
         room.on(RoomEvent.LocalTrackPublished, (publication) => {
@@ -478,9 +506,14 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               // 只有主播端静音自己（避免回声），观众端不静音
               videoRef.current.muted = isPublisher;
             }
+            
+            // 连麦状态同步：如果是观众且正在连麦，确保状态正确
+            if (!isPublisher && joinMicRequested) {
+              setIsMicConnected(true);
+            }
           }
         });
-
+        
         // 处理本地轨道移除
         room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
           // 更新状态
@@ -490,6 +523,29 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             setIsScreenSharing(false);
           } else if (publication.source === 'microphone') {
             setIsMicrophoneEnabled(false);
+            
+            // 连麦状态同步：如果麦克风轨道意外断开，更新连麦状态
+            if (isMicConnected) {
+              setIsMicConnected(false);
+              setLocalAudioTrack(null);
+              
+              // 如果是观众，发送断开连麦消息
+              if (!isPublisher && roomRef.current) {
+                const leaveMsg = {
+                  type: 'leave_mic',
+                  from: identity,
+                  timestamp: Date.now()
+                };
+                
+                roomRef.current.localParticipant.publishData(
+                  new TextEncoder().encode(JSON.stringify(leaveMsg)),
+                  {
+                    topic: 'mic_requests',
+                    reliable: true
+                  }
+                );
+              }
+            }
           }
         });
 
@@ -526,15 +582,26 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     setIsMicConnected(true);
                     setIsRequestingMic(false);
                     setJoinMicRequested(false);
-                    // 开启麦克风
+                    
+                    // 按照官方方案：显式创建和发布麦克风轨道
                     if (roomRef.current) {
-                      // 直接调用setMicrophoneEnabled，LiveKit会自动创建和发布麦克风轨道
-                      roomRef.current.localParticipant.setMicrophoneEnabled(true)
-                        .then(() => {
-                          console.log('麦克风轨道已成功发布');
+                      createLocalAudioTrack()
+                        .then((audioTrack: LocalAudioTrack) => {
+                          // 保存音频轨道引用
+                          setLocalAudioTrack(audioTrack);
+                          // 发布音频轨道到房间
+                          return roomRef.current!.localParticipant.publishTrack(audioTrack);
                         })
-                        .catch(error => {
-                          console.error('发布麦克风轨道失败:', error);
+                        .then(() => {
+                          console.log('麦克风轨道已成功创建和发布');
+                        })
+                        .catch((error: Error) => {
+                          console.error('创建或发布麦克风轨道失败:', error);
+                          setError('连麦失败: ' + error.message);
+                          setErrorType('mic');
+                          // 重置状态
+                          setIsMicConnected(false);
+                          setLocalAudioTrack(null);
                         });
                     }
                   }
@@ -799,10 +866,19 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
     if (!roomRef.current || !isMicConnected) return;
     
     try {
-      // 关闭麦克风
-      await roomRef.current.localParticipant.setMicrophoneEnabled(false);
+      // 1. 停止并卸载本地音频轨道
+      if (localAudioTrack) {
+        // 停止轨道采集
+        localAudioTrack.stop();
+        
+        // 从房间中卸载轨道
+        await roomRef.current.localParticipant.unpublishTrack(localAudioTrack);
+        
+        // 清除轨道引用
+        setLocalAudioTrack(null);
+      }
       
-      // 通过数据通道发送断开连麦消息
+      // 2. 通过数据通道发送断开连麦消息
       const leaveMsg = {
         type: 'leave_mic',
         from: identity,
@@ -817,14 +893,19 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         }
       );
       
+      // 3. 更新状态
       setIsMicConnected(false);
       setJoinMicRequested(false);
       
-      // 从连麦观众列表中移除
+      // 4. 从连麦观众列表中移除
       setConnectedAudience(prev => prev.filter(id => id !== identity));
     } catch (err) {
       console.error('断开连麦失败:', err);
       setError('断开连麦失败: ' + (err as Error).message);
+      
+      // 确保状态正确重置
+      setIsMicConnected(false);
+      setLocalAudioTrack(null);
     }
   };
   
@@ -1264,18 +1345,21 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             )}
           </div>
           
-          {/* 观众连麦请求按钮 */}
+          {/* 观众连麦请求按钮 - 移动端适配 */}
           {!isPublisher && (
             <div style={{
               display: 'flex',
-              gap: '4px',
+              gap: '8px',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '8px'
+              marginBottom: '12px'
             }}>
               {!isMicConnected && !joinMicRequested && (
                 <button
-                  onClick={sendMicRequest}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    sendMicRequest();
+                  }}
                   style={{
                     // 彻底重置按钮样式
                     all: 'unset',
@@ -1283,16 +1367,22 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '4px 8px',
-                    fontSize: '12px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
                     backgroundColor: '#1890ff',
                     color: '#fff',
-                    borderRadius: '4px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     border: '1px solid #1890ff',
                     outline: 'none',
                     boxShadow: 'none',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    // 移动端适配：增大点击区域
+                    minWidth: '100px',
+                    minHeight: '40px',
+                    // 添加触摸反馈
+                    WebkitTapHighlightColor: 'transparent',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   请求连麦
@@ -1301,7 +1391,10 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               
               {isRequestingMic && (
                 <button
-                  onClick={cancelMicRequest}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    cancelMicRequest();
+                  }}
                   style={{
                     // 彻底重置按钮样式
                     all: 'unset',
@@ -1309,16 +1402,22 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '4px 8px',
-                    fontSize: '12px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
                     backgroundColor: '#ff4d4f',
                     color: '#fff',
-                    borderRadius: '4px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     border: '1px solid #ff4d4f',
                     outline: 'none',
                     boxShadow: 'none',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    // 移动端适配：增大点击区域
+                    minWidth: '100px',
+                    minHeight: '40px',
+                    // 添加触摸反馈
+                    WebkitTapHighlightColor: 'transparent',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   取消请求
@@ -1327,7 +1426,10 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               
               {isMicConnected && (
                 <button
-                  onClick={leaveMic}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    leaveMic();
+                  }}
                   style={{
                     // 彻底重置按钮样式
                     all: 'unset',
@@ -1335,16 +1437,22 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '4px 8px',
-                    fontSize: '12px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
                     backgroundColor: '#ff4d4f',
                     color: '#fff',
-                    borderRadius: '4px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     border: '1px solid #ff4d4f',
                     outline: 'none',
                     boxShadow: 'none',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    // 移动端适配：增大点击区域
+                    minWidth: '100px',
+                    minHeight: '40px',
+                    // 添加触摸反馈
+                    WebkitTapHighlightColor: 'transparent',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   断开连麦
@@ -1353,12 +1461,16 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
               
               {joinMicRequested && !isRequestingMic && !isMicConnected && (
                 <div style={{
-                  fontSize: '12px',
+                  fontSize: '14px',
                   color: '#52c41a',
-                  padding: '4px 8px',
+                  padding: '8px 16px',
                   backgroundColor: 'rgba(82, 196, 26, 0.1)',
-                  borderRadius: '4px',
-                  border: '1px solid #52c41a'
+                  borderRadius: '8px',
+                  border: '1px solid #52c41a',
+                  minHeight: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}>
                   连麦请求已发送
                 </div>
@@ -1366,13 +1478,13 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
             </div>
           )}
           
-          {/* 消息输入框 */}
+          {/* 消息输入框 - 移动端适配 */}
           <div style={{
             display: 'flex',
-            gap: '2px',
+            gap: '8px',
             alignItems: 'center',
             padding: '0px',
-            marginTop: '1px'
+            marginTop: '4px'
           }}>
             <input
                 type="text"
@@ -1385,37 +1497,48 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                 autoCorrect="on"
                 style={{
                   flex: 1,
-                  height: '20px',
-                  padding: '0 6px',
+                  height: '40px',
+                  padding: '0 12px',
                   backgroundColor: 'rgba(0, 0, 0, 0.3)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '4px',
+                  borderRadius: '20px',
                   color: '#fff',
-                  fontSize: '16px', /* 增加到16px，避免移动端自动放大 */
+                  fontSize: '16px', /* 保持16px，避免移动端自动放大 */
                   outline: 'none',
                   boxSizing: 'border-box',
-                  lineHeight: '20px'
+                  lineHeight: '40px',
+                  // 移动端适配：增加内边距，提高可读性
+                  paddingLeft: '16px',
+                  paddingRight: '16px',
+                  // 添加触摸反馈
+                  WebkitTapHighlightColor: 'transparent'
                 }}
               />
             <button
               onClick={sendMessage}
               disabled={inputMessage.trim() === ''}
               style={{
-                width: '20px',
-                height: '20px',
+                width: '40px',
+                height: '40px',
                 backgroundColor: inputMessage.trim() === '' ? 'rgba(255, 255, 255, 0.2)' : '#1890ff',
                 color: '#fff',
                 border: '1px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: '4px',
+                borderRadius: '20px',
                 cursor: inputMessage.trim() === '' ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '10px',
+                fontSize: '16px',
                 padding: '0',
                 outline: 'none',
                 boxShadow: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                // 移动端适配：增大点击区域
+                minWidth: '40px',
+                minHeight: '40px',
+                // 添加触摸反馈
+                WebkitTapHighlightColor: 'transparent',
+                transition: 'all 0.2s ease'
               }}
             >
               →
@@ -1423,79 +1546,111 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
           </div>
         </div>
         
-        {/* 连麦请求审批面板 - 主播端显示 */}
+        {/* 连麦请求审批面板 - 主播端显示，移动端适配 */}
         {isPublisher && micRequestingUsers.length > 0 && (
           <div style={{
             position: 'absolute',
-            top: '10px',
-            left: '10px',
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            top: '16px',
+            left: '16px',
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
             border: '1px solid #666',
-            borderRadius: '4px',
-            padding: '8px',
-            zIndex: 20
+            borderRadius: '8px',
+            padding: '12px',
+            zIndex: 20,
+            // 移动端适配：限制最大宽度，避免溢出
+            maxWidth: '90vw'
           }}>
             <div style={{
               color: '#fff',
-              fontSize: '14px',
+              fontSize: '16px',
               fontWeight: 'bold',
-              marginBottom: '8px'
+              marginBottom: '12px'
             }}>连麦请求</div>
             
-            {micRequestingUsers.map((userId) => (
-              <div key={userId} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '6px',
-                padding: '4px',
-                backgroundColor: 'rgba(102, 102, 102, 0.3)',
-                borderRadius: '2px'
-              }}>
-                <span style={{
-                  color: '#fff',
-                  fontSize: '12px',
-                  maxWidth: '100px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>{userId.slice(0, 6)}...{userId.slice(-4)}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {micRequestingUsers.map((userId) => (
+                <div key={userId} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px',
+                  backgroundColor: 'rgba(102, 102, 102, 0.3)',
+                  borderRadius: '6px',
+                  border: '1px solid #666'
+                }}>
+                  <span style={{
+                    color: '#fff',
+                    fontSize: '14px',
+                    maxWidth: '150px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>{userId.slice(0, 6)}...{userId.slice(-4)}</span>
                 
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <button
-                    onClick={() => approveMicRequest(userId)}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: '#52c41a',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '2px',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                      outline: 'none'
-                    }}
-                  >
-                    批准
-                  </button>
-                  
-                  <button
-                    onClick={() => rejectMicRequest(userId)}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: '#ff4d4f',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '2px',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                      outline: 'none'
-                    }}
-                  >
-                    拒绝
-                  </button>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => approveMicRequest(userId)}
+                      style={{
+                        // 彻底重置按钮样式
+                        all: 'unset',
+                        // 重新定义必要样式
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '8px 16px',
+                        fontSize: '14px',
+                        backgroundColor: '#52c41a',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        border: '1px solid #52c41a',
+                        outline: 'none',
+                        boxShadow: 'none',
+                        boxSizing: 'border-box',
+                        // 移动端适配：增大点击区域
+                        minWidth: '70px',
+                        minHeight: '36px',
+                        // 添加触摸反馈
+                        WebkitTapHighlightColor: 'transparent',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      批准
+                    </button>
+                    
+                    <button
+                      onClick={() => rejectMicRequest(userId)}
+                      style={{
+                        // 彻底重置按钮样式
+                        all: 'unset',
+                        // 重新定义必要样式
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '8px 16px',
+                        fontSize: '14px',
+                        backgroundColor: '#ff4d4f',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        border: '1px solid #ff4d4f',
+                        outline: 'none',
+                        boxShadow: 'none',
+                        boxSizing: 'border-box',
+                        // 移动端适配：增大点击区域
+                        minWidth: '70px',
+                        minHeight: '36px',
+                        // 添加触摸反馈
+                        WebkitTapHighlightColor: 'transparent',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      拒绝
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
         
@@ -1697,7 +1852,7 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
         )}
       </div>
       
-      {/* 连麦观众列表 - 在主视频下方显示连麦观众编号 */}
+      {/* 连麦观众列表 - 在主视频下方显示连麦观众编号和控制功能 */}
       {connectedAudience.length > 0 && (
         <div style={{
           display: 'flex',
@@ -1722,19 +1877,106 @@ const LiveRoom: React.FC<LiveRoomProps> = ({ token, roomId, identity, isPublishe
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  backgroundColor: isSpeaking ? '#52c41a' : 'rgba(102, 102, 102, 0.8)',
-                  color: '#fff',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  border: `2px solid ${isSpeaking ? '#52c41a' : 'transparent'}`,
-                  boxShadow: isSpeaking ? '0 0 10px rgba(82, 196, 26, 0.6)' : 'none',
+                  gap: '4px',
+                  padding: '4px',
+                  backgroundColor: 'rgba(51, 51, 51, 0.9)',
+                  borderRadius: '8px',
+                  border: `2px solid ${isSpeaking ? '#52c41a' : '#666'}`,
                   transition: 'all 0.3s ease'
                 }}
               >
-                {index + 1}
+                {/* 连麦用户编号 */}
+                <div 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '50%',
+                    backgroundColor: isSpeaking ? '#52c41a' : 'rgba(102, 102, 102, 0.8)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    boxShadow: isSpeaking ? '0 0 10px rgba(82, 196, 26, 0.6)' : 'none'
+                  }}
+                >
+                  {index + 1}
+                </div>
+                
+                {/* 主播端控制按钮 */}
+                {isPublisher && participant && (
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    {/* 静音按钮 */}
+                    <button
+                      onClick={() => {
+                        // 静音/解除静音连麦用户
+                        // LiveKit SDK不允许直接静音远程参与者
+                        // 这里我们只提供UI按钮，实际功能需要通过服务器或其他方式实现
+                        console.log('静音按钮点击，需要通过服务器实现远程静音功能');
+                      }}
+                      style={{
+                        all: 'unset',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '4px',
+                        backgroundColor: '#1890ff',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                      title="静音"
+                    >
+                      🔊
+                    </button>
+                    
+                    {/* 移除连麦按钮 */}
+                    <button
+                      onClick={async () => {
+                        // 主播断开观众连麦
+                        if (roomRef.current) {
+                          // 发送断开连麦消息
+                          const disconnectMsg = {
+                            type: 'disconnect_mic',
+                            from: identity,
+                            to: audienceId,
+                            timestamp: Date.now()
+                          };
+                          
+                          roomRef.current.localParticipant.publishData(
+                            new TextEncoder().encode(JSON.stringify(disconnectMsg)),
+                            {
+                              topic: 'mic_requests',
+                              reliable: true
+                            }
+                          );
+                          
+                          // 从连麦列表中移除
+                          setConnectedAudience(prev => prev.filter(id => id !== audienceId));
+                        }
+                      }}
+                      style={{
+                        all: 'unset',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '4px',
+                        backgroundColor: '#ff4d4f',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                      title="移除连麦"
+                    >
+                      🚫
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

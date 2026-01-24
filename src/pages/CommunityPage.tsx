@@ -5,7 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAccount } from 'wagmi';
 import { checkSciaBalance } from '../lib/contracts/scia';
 import { OFFICIAL_HOST_WALLET_ADDRESSES, MIN_SCIA_BALANCE, OFFICIAL_ROOM_ID, RoomInfo } from '../lib/livekit-config';
-import LiveRoom from '../components/livekit/LiveRoom';
+import LiveRoom from '../components/livekit/CustomLiveRoom';
 import RoomList from '../components/community/RoomList';
 import { useLiveKitToken } from '../components/livekit/useLiveKitToken';
 
